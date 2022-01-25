@@ -8,14 +8,39 @@ class User(AbstractUser):
     password = models.CharField(max_length=255)
 
     annotator_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='annotators')
+    project_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='projects')
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
+
+class Notification(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(default='', blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+requestStatusChoices = (
+    ("1", "is_pending"),
+    ("2", "accepted"),
+    ("3", "declined"),
+)
+requestTypeChoices = (
+    ("1", "work"),
+    ("2", "hire"),
+)
+
+class Request(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField(default='', blank=True)
+    from_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name = "request_raisedby")
+    to_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name = "request_for")
+    type = models.CharField(max_length=20, choices = requestTypeChoices, default='1')
+    status = models.CharField(max_length=20, choices = requestStatusChoices, default='1')
 
 class Document(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
     image = models.ImageField(upload_to='static/images/')
+    is_annotated = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
 class Annotation(models.Model):
@@ -24,36 +49,31 @@ class Annotation(models.Model):
     topY = models.FloatField(default=0)
     bottomX = models.FloatField(default=0)
     bottomY = models.FloatField(default=0)
+    is_antipattern = models.BooleanField(default=False)
     document = models.ForeignKey(Document, on_delete=models.CASCADE)
 
 class AnnotationModel(models.Model):
     name = models.CharField(max_length=255)
-    description = models.TextField(default='', blank=True)
     avgWidth = models.FloatField(default=0)
     avgHeight = models.FloatField(default=0)
-    model_path = models.CharField(max_length=255, default='')
-    is_active = models.BooleanField(default=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def get_upload_path(instance, filename):
+        return 'static/models/{0}/{1}'.format(instance.user.username, filename)
+
+    model = models.FileField(upload_to=get_upload_path)
+    model_pool = models.IntegerField()
 
 class ModelPool(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
-    is_active = models.BooleanField(default=True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="modelpool_user_set")
     modelpool_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='sub_modelpools')
     subdescription_list = models.TextField(default='', blank=True)
-    models = models.ManyToManyField(AnnotationModel, related_name='models', symmetrical=False)
+    pool_models = models.ManyToManyField(AnnotationModel, related_name='models', symmetrical=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="modelpool_user_set")
 
-requestStatusChoices = (
-    ("1", "is_pending"),
-    ("2", "accepted"),
-    ("3", "declined"),
-)
-
-class Request(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.TextField(default='', blank=True)
-    raised_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name = "request_raisedby")
-    raised_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name = "request_for")
-    status = models.CharField(max_length=20, choices = requestStatusChoices, default='1')
+class ModelPoolStatus(models.Model):
+    main_modelpool = models.ForeignKey(ModelPool, on_delete=models.CASCADE, related_name="main_modelpool")
+    sub_modelpool = models.ForeignKey(ModelPool, on_delete=models.CASCADE, related_name="sub_modelpool")
+    is_active = models.BooleanField(default=True)
