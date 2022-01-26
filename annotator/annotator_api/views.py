@@ -28,11 +28,25 @@ def get_user_from_request(request):
 class RegisterView(APIView):
     def post(self, request):
         data = request.data
-        # data['annotator_list'] = []
-        # data['project_list'] = []
         serializer = UserSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+
+        user = User.objects.filter(username=data['username']).first()
+        payload = {
+            'id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30),
+            'iat': datetime.datetime.utcnow()
+        }
+        
+        token = jwt.encode(payload, 'secret', algorithm='HS256').decode('utf8')
+
+        response = Response()
+        response.set_cookie(key='jwt', value=token, httponly=True)
+        response.data = {
+            'jwt': token
+            }
+
         return Response(serializer.data)
 
 class LoginView(APIView):
