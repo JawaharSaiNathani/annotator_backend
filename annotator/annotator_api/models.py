@@ -4,6 +4,11 @@ from django.contrib.auth.models import AbstractUser
 class User(AbstractUser):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
+
+    def get_upload_path(instance, filename):
+        return 'static/users/{0}/images/{1}'.format(instance.username, filename)
+
+    image = models.ImageField(upload_to=get_upload_path, blank=True)
     username = models.CharField(max_length=255, unique=True)
     password = models.CharField(max_length=255)
 
@@ -39,7 +44,11 @@ class Request(models.Model):
 class Document(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
-    image = models.ImageField(upload_to='static/images/')
+
+    def get_upload_path(instance, filename):
+        return 'static/users/{0}/documents/{1}'.format(instance.user.username, filename)
+
+    image = models.ImageField(upload_to=get_upload_path)
     is_annotated = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
@@ -59,7 +68,7 @@ class AnnotationModel(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def get_upload_path(instance, filename):
-        return 'static/models/{0}/{1}'.format(instance.user.username, filename)
+        return 'static/users/{0}/models/{1}'.format(instance.user.username, filename)
 
     model = models.FileField(upload_to=get_upload_path)
     model_pool = models.IntegerField()
