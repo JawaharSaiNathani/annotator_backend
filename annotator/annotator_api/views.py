@@ -48,12 +48,10 @@ class RegisterView(APIView):
         token = jwt.encode(payload, 'secret', algorithm='HS256').decode('utf8')
 
         response = Response()
-        response.set_cookie(key='jwt', value=token, httponly=True)
         response.data = {
             'jwt': token
         }
-
-        return Response(serializer.data)
+        return response
 
 
 class LoginView(APIView):
@@ -117,10 +115,12 @@ class GetUserView(APIView):
     def get(self, request):
         user = get_user_from_request(request)
         data = UserSerializer(user).data
-
-        image = open(data['image'], 'rb')
-        del data['image']
-        data['image'] = base64.b64encode(image.read())
+        if data['image'] != None:
+            image = open(data['image'], 'rb')
+            del data['image']
+            data['image'] = base64.b64encode(image.read())
+        else:
+            data['image'] = ''
 
         annotator_list = []
         for annotator in data['annotator_list']:
@@ -140,22 +140,42 @@ class GetUserView(APIView):
 
         data['annotator_list'] = annotator_list
         data['project_list'] = project_list
-        # data['sent_requests'] = RequestSerializer(
-        #     Request.objects.filter(from_user=user.id), many=True).data
-        # data['received_requests'] = RequestSerializer(
-        #     Request.objects.filter(to_user=user.id), many=True).data
 
         return Response(data)
 
     def put(self, request):
         user = get_user_from_request(request)
-
         serializer = UserSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return Response({'message': 'success'})
 
+class GetSentRequests(APIView):
+    def get(self, request):
+        user = get_user_from_request(request)
+        data = {}
+        sent_requests = RequestSerializer(Request.objects.filter(from_user=user.id), many=True).data
+        request_type = {'1': 'work', '2': 'hire'}
+        request_status = {'1': 'pending', '2': 'accepted', '3': 'declined'}
+        for request in sent_requests:
+            request['type'] = request_type[request['type']]
+            request['status'] = request_status[request['status']]
+        data['sent-requests'] = sent_requests
+        return Response(data)
+
+class GetReceivedRequests(APIView):
+    def get(self, request):
+        user = get_user_from_request(request)
+        data = {}
+        received_requests = RequestSerializer(Request.objects.filter(to_user=user.id), many=True).data
+        request_type = {'1': 'work', '2': 'hire'}
+        request_status = {'1': 'pending', '2': 'accepted', '3': 'declined'}
+        for request in received_requests:
+            request['type'] = request_type[request['type']]
+            request['status'] = request_status[request['status']]
+        data['received-requests'] = received_requests
+        return Response(data)
 
 class GetUserListView(APIView):
     def get(self, request):
@@ -164,11 +184,13 @@ class GetUserListView(APIView):
         users.remove(user)
         users_list = []
         for usr in users:
-            user_data = UserSerializer(usr).data
-            del user_data['annotator_list']
-            del user_data['project_list']
-            users_list.append(user_data)
-        return Response(users_list)
+            if usr.is_staff == False:
+                user_data = UserSerializer(usr).data
+                del user_data['annotator_list']
+                del user_data['project_list']
+                users_list.append(user_data)
+        data = {'user-list': users_list}
+        return Response(data)
 
 
 def send_notification(title, description, user):
@@ -183,9 +205,9 @@ def send_notification(title, description, user):
 
 
 class AnnotatorView(APIView):
-    def post(self, request):
+    def delete(self, request, pk):
         user = get_user_from_request(request)
-        annotator_id = request.data
+        annotator_id = pk
 
         annotator_list = UserSerializer(user).data['annotator_list']
         annotator_list.remove(annotator_id)
@@ -208,9 +230,9 @@ class AnnotatorView(APIView):
         return Response({'message': 'success'})
 
 class ProjectView(APIView):
-    def post(self, request):
+    def delete(self, request, pk):
         user = get_user_from_request(request)
-        project_id = request.data['project_id']
+        project_id = pk
 
         user_project_list = UserSerializer(user).data['project_list']
         user_project_list.remove(project_id)
@@ -248,7 +270,6 @@ class RequestView(APIView):
     def put(self, request, pk):
         get_user_from_request(request)
         req_data = request.data
-
         req = Request.objects.filter(id=pk).first()
         req_serializer = RequestSerializer(req, data=req_data, partial=True)
         req_serializer.is_valid(raise_exception=True)
@@ -272,10 +293,13 @@ class RequestView(APIView):
                     from_user_data['annotator_list'].append(to_user_data['id'])
                     send_notification('From ' + to_user.name, 'Your request to hire ' +
                                       to_user.name + ' as annotator has been accepted', from_user.id)
+                del from_user_data['image']
                 from_user_serializer = UserSerializer(
                     from_user, data=from_user_data, partial=True)
                 from_user_serializer.is_valid(raise_exception=True)
                 from_user_serializer.save()
+                
+                del to_user_data['image']
                 to_user_serializer = UserSerializer(
                     to_user, data=to_user_data, partial=True)
                 to_user_serializer.is_valid(raise_exception=True)
