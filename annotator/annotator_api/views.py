@@ -10,7 +10,7 @@ from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from .serializers import *
 from .models import *
-from .lookup import lookup
+# from .lookup import lookup
 
 
 def get_user_from_request(request):
