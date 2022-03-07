@@ -13,7 +13,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from bson import ObjectId
 from .serializers import *
 from .models import *
-from .lookup import lookup
+# from .lookup import lookup
 
 # implementing websocket'
 import channels.layers

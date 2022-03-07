@@ -72,7 +72,7 @@ class Document(models.Model):
     def get_upload_path(instance, filename):
         return 'static/projects/{0}/documents/{1}'.format(instance.project.title.replace(' ', '') + '_' + str(instance.project._id), filename)
 
-    image = models.ImageField(upload_to=get_upload_path)
+    image = models.ImageField(upload_to=get_upload_path,blank=True)
     is_annotated = models.BooleanField(default=False)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="documents")
 
