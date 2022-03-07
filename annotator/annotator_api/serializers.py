@@ -31,7 +31,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), many=False)
 
-    annotation_list = AnnotationSerializer(source="annotations", required=False, Many=True)
+    annotation_list = AnnotationSerializer(source="annotations", required=False, many=True)
 
     class Meta:
         model = Document
