@@ -27,13 +27,15 @@ def get_user_from_request(request):
     user = User.objects.filter(id=payload['id']).first()
     if not user:
         raise AuthenticationFailed('User not found')
-
+    print("########inside get_user_from_request############")
+    print(user)
     return user
 
 
 class RegisterView(APIView):
     def post(self, request):
         data = request.data
+        print(data)
         serializer = UserSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -335,15 +337,17 @@ def get_single_Document(id):
 
 
 def get_multiple_documents(user_id):
+    print("#########inside get_multiple_documents###########")
+    print(user_id)
     documents = []
     for document in Document.objects.filter(user=user_id):
         serializer = DocumentSerializer(document)
         data = serializer.data
         try:
-            image = open(data['image'], 'rb')
-            del data['image']
-            del data['user']
-            data['image'] = base64.b64encode(image.read())
+            # image = open(data['image'], 'rb')
+            # del data['image']
+            # del data['user']
+            # data['image'] = base64.b64encode(image.read())
             documents.append(data)
         except:
             document.delete()

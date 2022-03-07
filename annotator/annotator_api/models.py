@@ -48,7 +48,7 @@ class Document(models.Model):
     def get_upload_path(instance, filename):
         return 'static/users/{0}/documents/{1}'.format(instance.user.username, filename)
 
-    image = models.ImageField(upload_to=get_upload_path)
+    image = models.ImageField(upload_to=get_upload_path,blank=True)
     is_annotated = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
