@@ -13,6 +13,7 @@ import copy
 import random
 from PIL import Image
 from coordinates import *
+from asgiref.sync import async_to_sync
 
 def get_annotations(annotations):
     patterns = []
@@ -152,7 +153,7 @@ class cnn(nn.Module):
         x = x.view(x.size(0), -1)
         return x
 
-def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
+def train_model(train_loader, channel_layer, kernel_dimension = [30, 30], max_epochs = 1):
     first_epoch_loss = None
     last_epoch_loss  = None
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -166,6 +167,7 @@ def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
     opt = optim.Adam(net.parameters(), lr = 0.001)
     best_model = None
     min_loss = sys.maxsize
+    perc = 42
 
     for epoch in range(max_epochs):
         for i, data in enumerate(train_loader, 0):
@@ -182,6 +184,9 @@ def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
             loss.backward()
             opt.step()
 
+        async_to_sync(channel_layer.group_send)('train_1', {'type': 'status', 'message': 'Model Training. Loss - {}'.format(loss), 'percentage': perc })
+        perc += 2
+
         print('Epoch: {: >2}/{: >2}  loss: {}'.format(epoch, max_epochs, loss))
 
         if(epoch == 0):
@@ -191,12 +196,18 @@ def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
     
     return (best_model, min_loss, first_epoch_loss, last_epoch_loss)
 
-def lookup(annotations, model_name):
+def lookup(annotations, model_name, channel_layer):
     patterns, pattern_dimensions, antipatterns, antipattern_dimensions = get_annotations(annotations)
+
+    async_to_sync(channel_layer.group_send)('train_1', {'type': 'status', 'message': 'gathered pattern and antipattern images', 'percentage': 20 })
+    
     patterns = 255 - patterns
     antipatterns = 255 - antipatterns
 
     (train_x, train_y) = make_dataset(p_dataset = patterns, p_dimension = pattern_dimensions, ap_dataset = antipatterns, ap_dimensions = antipattern_dimensions, no_of_images = 200)
+    
+    async_to_sync(channel_layer.group_send)('train_1', {'type': 'status', 'message': 'generated training dataset', 'percentage': 35 })
+    
     train_x = train_x.type(torch.float32)
     train_y = train_y.type(torch.float32)
     train_dataset = data.TensorDataset(train_x, train_y)
@@ -211,18 +222,22 @@ def lookup(annotations, model_name):
     if(kernel_width%2 == 0) :
         kernel_width += 1
 
+    async_to_sync(channel_layer.group_send)('train_1', {'type': 'status', 'message': 'started model training', 'percentage': 40 })
+    
     totalIterations = 2
     currentIteration = 0
     true_learning = False
     while currentIteration < totalIterations:
         print('Iteration =>', currentIteration)
         currentIteration += 1
-        best_model, loss, first_loss, last_loss = train_model(train_loader, max_epochs = 20, kernel_dimension = [kernel_height, kernel_width])
+        best_model, loss, first_loss, last_loss = train_model(train_loader, max_epochs = 20, kernel_dimension = [kernel_height, kernel_width], channel_layer = channel_layer)
 
         if((first_loss*0.3) >= last_loss):
             true_learning = True
             break 
     
+        async_to_sync(channel_layer.group_send)('train_1', {'type': 'status', 'message': 'Loss too high. Retraining model', 'percentage': 40 })
+
     print('Final Loss =',int(loss))
 
     if(true_learning):
