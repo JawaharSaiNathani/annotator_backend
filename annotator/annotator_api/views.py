@@ -23,15 +23,20 @@ from asgiref.sync import async_to_sync
 
 def get_user_from_request(request):
     token = request.headers['authtoken']
+    print("token is {}".format(token))
     if not token:
         raise AuthenticationFailed('Unauthenticated!')
     try:
         payload = jwt.decode(token, 'secret', algorithms=['HS256'])
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed('Unauthenticated!')
-    user = User.objects.filter(_id=ObjectId(payload['_id'])).first()
+
+    print(payload)
+    user = User.objects.filter(_id=ObjectId(payload['_id'])).first() #doubt
     if not user:
         raise AuthenticationFailed('User not found')
+    print(user)
+    print("hello")
     return user
 
 
@@ -140,10 +145,13 @@ class GetUserProjectsView(APIView):
 
 class CreateProjectView(APIView):
     def dispatch(self, request, *args, **kwargs):
+        print("dispatch inside CreateProjectView")
         self.user_id = get_user_from_request(request)._id
         return super().dispatch(request, *args, **kwargs)
     
     def post(self, request):
+        print("post request inside CreateProjectView")
+        print(request.data)
         data = request.data
         data['owners'] = [ObjectId(self.user_id)]
         data['staff'] = []
@@ -151,7 +159,7 @@ class CreateProjectView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response({'message': 'success'})
+        return Response({'message': 'project created successfully'})
 
 
 
@@ -587,6 +595,45 @@ class AnnotationListView(APIView):
             data['document'] = ObjectId(data['document'])
             return Response({'annotations': DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()})
         return resp
+
+class AllAnnotationsView(APIView):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_id = get_user_from_request(request)._id
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self,request):
+
+        data = request.data
+        data['project'] = ObjectId(data['project'])
+        project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
+        proj_owners = project_serializer.get_owners()
+        proj_staff = project_serializer.get_staff()
+
+        if self.user_id in proj_owners or self.user_id in proj_staff:
+            annotations = []
+            
+            for document in Document.objects.filter(project=data['project']):
+                for annotation in Annotation.objects.filter(document=document._id):
+
+                    annotations.append({
+                        'name':annotation.name,
+                        '_id': str(annotation._id),
+                        'topX': annotation.topX,
+                        'topY': annotation.topY,
+                        'bottomX': annotation.bottomX,
+                        'bottomY': annotation.bottomY,
+                        'is_antipattern': annotation.is_antipattern,
+                        'document': str(document._id)
+                    })
+            return Response({
+                "annotations":annotation
+            })
+        
+        return Response({
+        'exception': 'Access Denied'
+    }, status=403)
+
+            
 
 class TrainModelView(APIView):
     def dispatch(self, request, *args, **kwargs):

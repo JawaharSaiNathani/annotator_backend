@@ -23,8 +23,15 @@ class AnnotationSerializer(serializers.ModelSerializer):
             'topY': data['topY'],
             'bottomX': data['bottomX'],
             'bottomY': data['bottomY'],
-            'is_antipattern': data['is_antipattern']
+            'is_antipattern': data['is_antipattern'],
+
         }
+    
+    def to_representation(self):
+        data = super().to_representation(self.instance)
+        data['_id'] = str(data['_id'])
+        print(data)
+        return data
 
 
 class DocumentSerializer(serializers.ModelSerializer):
@@ -70,6 +77,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ['_id', 'title', 'description', 'owners', 'staff', 'project_documents']
     
     def to_representation(self, instance):
+        print("understanding working of backend")
         return {
             '_id': str(instance._id),
             'title': instance.title,
