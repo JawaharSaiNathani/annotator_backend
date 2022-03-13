@@ -155,6 +155,7 @@ class CreateProjectView(APIView):
         data = request.data
         data['owners'] = [ObjectId(self.user_id)]
         data['staff'] = []
+        print(data)
         serializer = ProjectSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -340,6 +341,8 @@ class GetProjectListView(APIView):
         for proj in projects:
             proj_data = ProjectSerializer(proj).data
             projects_list.append(proj_data)
+
+        print(projects_list)
         data = {'project-list': projects_list}
         return Response(data)
 
@@ -431,6 +434,7 @@ class DocumentView(APIView):
 
     def post(self, request):
         data = request.data
+        print(data)
         data['project'] = ObjectId(data['project'])
         proj_owners = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_owners()
         proj_staff = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_staff()
@@ -500,7 +504,10 @@ class DocumentListView(APIView):
 
     def post(self, request):
         data = request.data
+        print("###INSIDE DOCUMENT LIST VIEW POST CALL###")
+        print(data)
         data['project'] = ObjectId(data['project'])
+        print(Project.objects.filter(_id=data['project']).first())
         project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
         proj_owners = project_serializer.get_owners()
         proj_staff = project_serializer.get_staff()

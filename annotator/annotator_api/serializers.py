@@ -50,7 +50,8 @@ class DocumentSerializer(serializers.ModelSerializer):
             image = open(data['image'], 'rb')
             data['image'] = base64.b64encode(image.read())
         except:
-            instance.delete()
+            # instance.delete()
+            print("instance will be deleted")
         return {
             '_id': str(data['_id']),
             'name': data['name'],
@@ -66,7 +67,9 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    print("###PROJECT SERIALIZER STARTED###")
     _id = ObjectId()
+    print(_id)
     owners = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True)
     staff = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
 
@@ -85,14 +88,17 @@ class ProjectSerializer(serializers.ModelSerializer):
         }
 
     def get_owners(self):
+        print("get_owners function called")
         data = super().to_representation(self.instance)
         return data['owners']
     
     def get_staff(self):
+        print("get_staff function called")
         data = super().to_representation(self.instance)
         return data['staff']
     
     def get_documents(self):
+        print("get_documents function called")
         data = super().to_representation(self.instance)
         return data['project_documents']
 
