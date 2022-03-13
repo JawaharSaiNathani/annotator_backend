@@ -523,10 +523,13 @@ class DocumentListView(APIView):
 
 def validate_data(data, user_id):
     data['project'] = ObjectId(data['project'])
-    if Document.objects.filter(_id=ObjectId(data['document'])).first().project != data['project']:
-        return Response({
-            'exception': 'Document not found'
-        }, status=400)
+    print("validate_data")
+    print(str(Document.objects.filter(_id=ObjectId(data['document'])).first().project))
+    print(data['project'])
+    # if Document.objects.filter(_id=ObjectId(data['document'])).first().project != data['project']:
+    #     return Response({
+    #         'exception': 'Document not found'
+    #     }, status=400)
 
     project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
     proj_owners = project_serializer.get_owners()
@@ -549,7 +552,7 @@ class AnnotationView(APIView):
         if resp == True:
             data = request.data
             data['annotation']['document'] = ObjectId(data['annotation']['document'])
-            data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
+            # data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
             serializer = AnnotationSerializer(data=data['annotation'])
             serializer.is_valid(raise_exception=True)
             serializer.save()
