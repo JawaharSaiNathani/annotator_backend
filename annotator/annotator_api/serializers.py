@@ -27,7 +27,7 @@ class AnnotationSerializer(serializers.ModelSerializer):
 
         }
     
-    def to_representation(self):
+    def dummy(self):
         data = super().to_representation(self.instance)
         data['_id'] = str(data['_id'])
         print(data)

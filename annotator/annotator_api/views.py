@@ -612,8 +612,9 @@ class AllAnnotationsView(APIView):
         return super().dispatch(request, *args, **kwargs)
     
     def post(self,request):
-
+        print("AllAnnotationsView Started")
         data = request.data
+        print(data)
         data['project'] = ObjectId(data['project'])
         project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
         proj_owners = project_serializer.get_owners()
@@ -623,6 +624,7 @@ class AllAnnotationsView(APIView):
             annotations = []
             
             for document in Document.objects.filter(project=data['project']):
+                print("hello")
                 for annotation in Annotation.objects.filter(document=document._id):
 
                     annotations.append({
@@ -636,7 +638,7 @@ class AllAnnotationsView(APIView):
                         'document': str(document._id)
                     })
             return Response({
-                "annotations":annotation
+                "annotations":annotations
             })
         
         return Response({
