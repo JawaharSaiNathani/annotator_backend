@@ -36,8 +36,6 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'channels',
-
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -77,7 +75,6 @@ CORS_ALLOW_HEADERS = [
 ]
 
 ROOT_URLCONF = 'annotator.urls'
-ASGI_APPLICATION = 'annotator.routing.application'
 
 TEMPLATES = [
     {
@@ -109,15 +106,6 @@ DATABASES = {
             'host': env('DATABASE_URL')
         }
     }
-}
-
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
-        },
-    },
 }
 
 

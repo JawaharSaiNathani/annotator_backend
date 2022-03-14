@@ -25,6 +25,7 @@ class Project(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
 
+    creator = models.ForeignKey(User, on_delete=models.CASCADE)
     owners = models.ManyToManyField(User, blank=True, symmetrical=False, related_name='owner')
     staff = models.ManyToManyField(User, blank = True, symmetrical=False, related_name='staff')
 
@@ -86,20 +87,25 @@ class Annotation(models.Model):
     bottomX = models.FloatField(default=0)
     bottomY = models.FloatField(default=0)
     is_antipattern = models.BooleanField(default=False)
+    ground_truth = models.BooleanField(default=True)
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="annotations")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+
 
 class AnnotationModel(models.Model):
     _id = models.ObjectIdField(primary_key=True)
     name = models.CharField(max_length=255)
     avgWidth = models.FloatField(default=0)
     avgHeight = models.FloatField(default=0)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     def get_upload_path(instance, filename):
-        return 'static/users/{0}/models/{1}'.format(instance.user.username, filename)
+        return 'static/models/' + instance.name.replace(' ', '') + '_' + str(instance._id) + '.pth'
 
     model = models.FileField(upload_to=get_upload_path)
     model_pool = models.IntegerField()
+
+
 
 class ModelPool(models.Model):
     _id = models.ObjectIdField(primary_key=True)
@@ -109,7 +115,10 @@ class ModelPool(models.Model):
     modelpool_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='sub_modelpools')
     subdescription_list = models.TextField(default='', blank=True)
     pool_models = models.ManyToManyField(AnnotationModel, related_name='models', symmetrical=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="modelpool_user_set")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+
 
 class ModelPoolStatus(models.Model):
     _id = models.ObjectIdField(primary_key=True)

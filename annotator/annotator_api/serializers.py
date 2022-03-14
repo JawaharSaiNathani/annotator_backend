@@ -1,4 +1,3 @@
-from numpy import source
 from rest_framework import serializers
 import base64
 from .models import *
@@ -9,10 +8,11 @@ from bson import ObjectId
 class AnnotationSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     document = serializers.PrimaryKeyRelatedField(queryset=Document.objects.all(), many=False)
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
 
     class Meta:
         model = Annotation
-        fields = ['_id', 'name', 'topX', 'topY', 'bottomX', 'bottomY', 'is_antipattern', 'document']
+        fields = ['_id', 'name', 'topX', 'topY', 'bottomX', 'bottomY', 'is_antipattern', 'ground_truth', 'document', 'user']
     
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -23,15 +23,18 @@ class AnnotationSerializer(serializers.ModelSerializer):
             'topY': data['topY'],
             'bottomX': data['bottomX'],
             'bottomY': data['bottomY'],
-            'is_antipattern': data['is_antipattern']
+            'is_antipattern': data['is_antipattern'],
+            'ground_truth': data['ground_truth'],
+            'user': UserSerializer(User.objects.filter(_id=data['user']).first()).get()
         }
+
 
 
 class DocumentSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), many=False)
 
-    annotation_list = AnnotationSerializer(source="annotations", required=False, Many=True)
+    annotation_list = AnnotationSerializer(source="annotations", required=False, many=True)
 
     class Meta:
         model = Document
@@ -60,6 +63,7 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     _id = ObjectId()
+    creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
     owners = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True)
     staff = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
 
@@ -67,13 +71,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['_id', 'title', 'description', 'owners', 'staff', 'project_documents']
+        fields = ['_id', 'title', 'description', 'creator', 'owners', 'staff', 'project_documents']
     
     def to_representation(self, instance):
         return {
             '_id': str(instance._id),
             'title': instance.title,
-            'description': instance.description
+            'description': instance.description,
+            'creator': instance.creator.username
         }
 
     def get_owners(self):

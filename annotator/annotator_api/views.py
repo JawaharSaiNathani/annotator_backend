@@ -1,9 +1,6 @@
-from functools import partial
-import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework import permissions
 import jwt
 import datetime
 import os
@@ -14,10 +11,6 @@ from bson import ObjectId
 from .serializers import *
 from .models import *
 # from .lookup import lookup
-
-# implementing websocket'
-import channels.layers
-from asgiref.sync import async_to_sync
 
 
 
@@ -145,6 +138,7 @@ class CreateProjectView(APIView):
     
     def post(self, request):
         data = request.data
+        data['creator'] = ObjectId(self.user_id)
         data['owners'] = [ObjectId(self.user_id)]
         data['staff'] = []
         serializer = ProjectSerializer(data=data)
@@ -535,6 +529,7 @@ class AnnotationView(APIView):
             data = request.data
             data['annotation']['document'] = ObjectId(data['annotation']['document'])
             data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
+            data['annotation']['user'] = self.user_id
             serializer = AnnotationSerializer(data=data['annotation'])
             serializer.is_valid(raise_exception=True)
             serializer.save()
@@ -552,10 +547,14 @@ class AnnotationView(APIView):
                 return Response({
                     'exception': 'Annotation not found'
                 }, status=400)
-            serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response({'message': 'success'})
+            if annotation.user == self.user_id:
+                serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response({'message': 'success'})
+            return Response({
+                'exception': 'Access Denied'
+            }, status=403)
         return resp
 
     def delete(self, request):
@@ -569,8 +568,12 @@ class AnnotationView(APIView):
                 return Response({
                     'exception': 'Annotation not found'
                 }, status=400)
-            annotation.delete()
-            return Response({'message': 'success'})
+            if annotation.user == self.user_id:
+                annotation.delete()
+                return Response({'message': 'success'})
+            return Response({
+                'exception': 'Access Denied'
+            }, status=403)
         return resp
 
 
@@ -585,8 +588,21 @@ class AnnotationListView(APIView):
         if resp == True:
             data = request.data
             data['document'] = ObjectId(data['document'])
-            return Response({'annotations': DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()})
+            annotations = DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()
+            user_annotations = []
+            other_annotations = []
+            for annotation in annotations:
+                if annotation['user'] == self.user_id:
+                    user_annotations.append(annotation)
+                else:
+                    other_annotations.append(annotation)
+            return Response({
+                'user_annotations': user_annotations,
+                'other_annotations': other_annotations
+            })
         return resp
+
+
 
 class TrainModelView(APIView):
     def dispatch(self, request, *args, **kwargs):

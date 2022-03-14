@@ -12,8 +12,6 @@ import sys
 import copy
 import random
 from PIL import Image
-from coordinates import *
-from asgiref.sync import async_to_sync
 
 def get_annotations(annotations):
     patterns = []
