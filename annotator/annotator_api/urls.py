@@ -17,7 +17,7 @@ urlpatterns = [
     path('get-user-list', GetUserListView.as_view(), name='UserList'),
     path('get-project-list', GetProjectListView.as_view(), name='ProjectList'),
 
-    path('get-project', GetProjectView.as_view()),
+    path('get-project-users', GetProjectUsersView.as_view()),
 
     path('delete-user', RemoveUserView.as_view()),
     path('leave-project', LeaveProjectView.as_view()),
