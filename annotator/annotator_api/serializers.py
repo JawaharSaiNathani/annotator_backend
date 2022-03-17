@@ -51,9 +51,9 @@ class DocumentSerializer(serializers.ModelSerializer):
         try:
             image = open(data['image'], 'rb')
             data['image'] = base64.b64encode(image.read())
-        except:
-            # instance.delete()
-            print("instance will be deleted")
+        except Exception as e:
+            print(e)
+            instance.delete()
         return {
             '_id': str(data['_id']),
             'name': data['name'],
@@ -69,7 +69,6 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    print("###PROJECT SERIALIZER STARTED###")
     _id = ObjectId()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
     owners = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True)
@@ -82,7 +81,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ['_id', 'title', 'description', 'creator', 'owners', 'staff', 'project_documents']
     
     def to_representation(self, instance):
-        print("understanding working of backend")
         return {
             '_id': str(instance._id),
             'title': instance.title,
@@ -91,17 +89,14 @@ class ProjectSerializer(serializers.ModelSerializer):
         }
 
     def get_owners(self):
-        print("get_owners function called")
         data = super().to_representation(self.instance)
         return data['owners']
     
     def get_staff(self):
-        print("get_staff function called")
         data = super().to_representation(self.instance)
         return data['staff']
     
     def get_documents(self):
-        print("get_documents function called")
         data = super().to_representation(self.instance)
         return data['project_documents']
 

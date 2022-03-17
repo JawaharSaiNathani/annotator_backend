@@ -16,7 +16,6 @@ from .models import *
 
 def get_user_from_request(request):
     token = request.headers['authtoken']
-    print("token is {}".format(token))
     if not token:
         raise AuthenticationFailed('Unauthenticated!')
     try:
@@ -24,12 +23,9 @@ def get_user_from_request(request):
     except jwt.ExpiredSignatureError:
         raise AuthenticationFailed('Unauthenticated!')
 
-    print(payload)
     user = User.objects.filter(_id=ObjectId(payload['_id'])).first() #doubt
     if not user:
         raise AuthenticationFailed('User not found')
-    print(user)
-    print("hello")
     return user
 
 
@@ -138,18 +134,14 @@ class GetUserProjectsView(APIView):
 
 class CreateProjectView(APIView):
     def dispatch(self, request, *args, **kwargs):
-        print("dispatch inside CreateProjectView")
         self.user_id = get_user_from_request(request)._id
         return super().dispatch(request, *args, **kwargs)
     
     def post(self, request):
-        print("post request inside CreateProjectView")
-        print(request.data)
         data = request.data
         data['creator'] = ObjectId(self.user_id)
         data['owners'] = [ObjectId(self.user_id)]
         data['staff'] = []
-        print(data)
         serializer = ProjectSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -158,7 +150,7 @@ class CreateProjectView(APIView):
 
 
 
-class GetProjectView(APIView):
+class GetProjectUsersView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user_id = get_user_from_request(request)._id
         return super().dispatch(request, *args, **kwargs)
@@ -253,7 +245,7 @@ class RequestView(APIView):
         return Response({'message': 'success'})
 
     def put(self, request):
-        if request.data['status'] == 'accepted':
+        if request.data['status'] == '2':
             req_id = request.data['id']
             req = Request.objects.filter(_id=ObjectId(req_id)).first()
             req_data = RequestSerializer(req).data
@@ -276,17 +268,19 @@ class RequestView(APIView):
                 if req_data['role'] == 'owner':
                     proj_id = req_data['project']['_id']
                     proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
-                    proj_owners.append(User.objects.filter(username=req_data['user']['username']).first()._id)
-                    proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
-                    proj_serializer.is_valid(raise_exception=True)
-                    proj_serializer.save()
+                    if User.objects.filter(username=req_data['user']['username']).first()._id not in proj_owners:
+                        proj_owners.append(User.objects.filter(username=req_data['user']['username']).first()._id)
+                        proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
+                        proj_serializer.is_valid(raise_exception=True)
+                        proj_serializer.save()
                 else:
                     proj_id = req_data['project']['_id']
                     proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
-                    proj_staff.append(User.objects.filter(username=req_data['user']['username']).first()._id)
-                    proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
-                    proj_serializer.is_valid(raise_exception=True)
-                    proj_serializer.save()
+                    if User.objects.filter(username=req_data['user']['username']).first()._id not in proj_staff:
+                        proj_staff.append(User.objects.filter(username=req_data['user']['username']).first()._id)
+                        proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
+                        proj_serializer.is_valid(raise_exception=True)
+                        proj_serializer.save()
             
                 return Response({'message': 'success'})
             
@@ -336,7 +330,6 @@ class GetProjectListView(APIView):
             proj_data = ProjectSerializer(proj).data
             projects_list.append(proj_data)
 
-        print(projects_list)
         data = {'project-list': projects_list}
         return Response(data)
 
@@ -360,32 +353,38 @@ class RemoveUserView(APIView):
         self.user_id = self.user._id
         return super().dispatch(request, *args, **kwargs)
     
-    def delete(self, request):
+    def post(self, request):
         data = request.data
         proj_id = data['project_id']
-        proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
-        if self.user_id in proj_owners:
-            temp_user_id = ObjectId(UserSerializer(User.objects.filter(username=data['user']).first()).data['_id'])
-            if temp_user_id in proj_owners:
-                proj_owners.remove(temp_user_id)
-                proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
-                proj_serializer.is_valid(raise_exception=True)
-                proj_serializer.save()
-                return Response({'message': 'success'})
-            else:
-                proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
-                if temp_user_id in proj_staff:
-                    proj_staff.remove(temp_user_id)
-                    proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
+        if data['user'] != ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).data['creator']:
+            proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
+            print(proj_owners)
+            if self.user_id in proj_owners:
+                temp_user_id = ObjectId(UserSerializer(User.objects.filter(username=data['user']).first()).data['_id'])
+                print(proj_owners)
+                if temp_user_id in proj_owners:
+                    proj_owners.remove(temp_user_id)
+                    proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
                     proj_serializer.is_valid(raise_exception=True)
                     proj_serializer.save()
                     return Response({'message': 'success'})
+                else:
+                    proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
+                    if temp_user_id in proj_staff:
+                        proj_staff.remove(temp_user_id)
+                        proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
+                        proj_serializer.is_valid(raise_exception=True)
+                        proj_serializer.save()
+                        return Response({'message': 'success'})
+                return Response({
+                    'exception': 'User not found'
+                }, status=203)
             return Response({
-                'exception': 'User not found'
-            }, status=203)
+                'exception': 'No Permission'
+            }, status=403)
         return Response({
-            'exception': 'No Permission'
-        }, status=403)
+            'exception': 'Creator cannot be removed from project.'
+        }, status=203)
 
 
 
@@ -395,29 +394,33 @@ class LeaveProjectView(APIView):
         self.user_id = self.user._id
         return super().dispatch(request, *args, **kwargs)
     
-    def delete(self, request):
+    def post(self, request):
         data = request.data
         proj_id = data['project_id']
-        proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
-        if self.user_id in proj_owners:
-            proj_owners.remove(self.user_id)
-            proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
-            proj_serializer.is_valid(raise_exception=True)
-            proj_serializer.save()
-
-            return Response({'message': 'success'})
-        else:
-            proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
-            if self.user_id in proj_staff:
-                proj_staff.remove(self.user_id)
-                proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
+        if self.user.username != ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).data['creator']:
+            proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
+            if self.user_id in proj_owners:
+                proj_owners.remove(self.user_id)
+                proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
                 proj_serializer.is_valid(raise_exception=True)
                 proj_serializer.save()
 
                 return Response({'message': 'success'})
-            return Response({
-                'exception': 'Project not found'
-            }, status=203)
+            else:
+                proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
+                if self.user_id in proj_staff:
+                    proj_staff.remove(self.user_id)
+                    proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
+                    proj_serializer.is_valid(raise_exception=True)
+                    proj_serializer.save()
+
+                    return Response({'message': 'success'})
+                return Response({
+                    'exception': 'Project not found'
+                }, status=203)
+        return Response({
+            'exception': 'Creator cannot be removed from project.'
+        }, status=203)
 
 
 
@@ -427,16 +430,18 @@ class DocumentView(APIView):
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request):
-        data = request.data
-        print(data)
-        data['project'] = ObjectId(data['project'])
+        data = dict(request.data)
+        data['name'] = data['name'][0]
+        data['description'] = data['description'][0]
+        data['image'] = data['image'][0]
+        data['project'] = ObjectId(data['project'][0])
         proj_owners = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_owners()
         proj_staff = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_staff()
         if self.user_id in proj_owners or self.user_id in proj_staff:
             serializer = DocumentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            return Response({'message': 'success'})
+            return Response(serializer.data)
         return Response({
             'exception': 'Access denied'
         }, status=403)
@@ -498,20 +503,21 @@ class DocumentListView(APIView):
 
     def post(self, request):
         data = request.data
-        print("###INSIDE DOCUMENT LIST VIEW POST CALL###")
-        print(data)
         data['project'] = ObjectId(data['project'])
-        print(Project.objects.filter(_id=data['project']).first())
-        project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
-        proj_owners = project_serializer.get_owners()
-        proj_staff = project_serializer.get_staff()
-        if self.user_id in proj_owners or self.user_id in proj_staff:
+        project = Project.objects.filter(_id=data['project']).first()
+        if project:
+            project_serializer = ProjectSerializer(project)
+            proj_owners = project_serializer.get_owners()
+            proj_staff = project_serializer.get_staff()
+            if self.user_id in proj_owners or self.user_id in proj_staff:
+                return Response(project_serializer.get_documents())
             return Response({
-                'documents': project_serializer.get_documents()
-            })
-        return Response({
-            'exception': 'Access Denied'
-        }, status=403)
+                'exception': 'Access Denied'
+            }, status=403)
+        else:
+            return Response({
+                'exception': 'Project cannot be found'
+            }, status=400)
 
 
 
