@@ -51,9 +51,9 @@ class DocumentSerializer(serializers.ModelSerializer):
         try:
             image = open(data['image'], 'rb')
             data['image'] = base64.b64encode(image.read())
-        except:
-            # instance.delete()
-            print("instance will be deleted")
+        except Exception as e:
+            print(e)
+            instance.delete()
         return {
             '_id': str(data['_id']),
             'name': data['name'],
