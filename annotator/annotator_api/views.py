@@ -245,7 +245,7 @@ class RequestView(APIView):
         return Response({'message': 'success'})
 
     def put(self, request):
-        if request.data['status'] == 'accepted':
+        if request.data['status'] == '2':
             req_id = request.data['id']
             req = Request.objects.filter(_id=ObjectId(req_id)).first()
             req_data = RequestSerializer(req).data
@@ -353,13 +353,15 @@ class RemoveUserView(APIView):
         self.user_id = self.user._id
         return super().dispatch(request, *args, **kwargs)
     
-    def delete(self, request):
+    def post(self, request):
         data = request.data
         proj_id = data['project_id']
-        if self.user.username != ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).data['creator']:
+        if data['user'] != ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).data['creator']:
             proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
+            print(proj_owners)
             if self.user_id in proj_owners:
                 temp_user_id = ObjectId(UserSerializer(User.objects.filter(username=data['user']).first()).data['_id'])
+                print(proj_owners)
                 if temp_user_id in proj_owners:
                     proj_owners.remove(temp_user_id)
                     proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
@@ -392,7 +394,7 @@ class LeaveProjectView(APIView):
         self.user_id = self.user._id
         return super().dispatch(request, *args, **kwargs)
     
-    def delete(self, request):
+    def post(self, request):
         data = request.data
         proj_id = data['project_id']
         if self.user.username != ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).data['creator']:
@@ -428,16 +430,18 @@ class DocumentView(APIView):
         return super().dispatch(request, *args, **kwargs)
 
     def post(self, request):
-        data = request.data
-        print(data)
-        data['project'] = ObjectId(data['project'])
+        data = dict(request.data)
+        data['name'] = data['name'][0]
+        data['description'] = data['description'][0]
+        data['image'] = data['image'][0]
+        data['project'] = ObjectId(data['project'][0])
         proj_owners = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_owners()
         proj_staff = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_staff()
         if self.user_id in proj_owners or self.user_id in proj_staff:
             serializer = DocumentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            return Response({'message': 'success'})
+            return Response(serializer.data)
         return Response({
             'exception': 'Access denied'
         }, status=403)
@@ -499,20 +503,21 @@ class DocumentListView(APIView):
 
     def post(self, request):
         data = request.data
-        print("###INSIDE DOCUMENT LIST VIEW POST CALL###")
-        print(data)
         data['project'] = ObjectId(data['project'])
-        print(Project.objects.filter(_id=data['project']).first())
-        project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
-        proj_owners = project_serializer.get_owners()
-        proj_staff = project_serializer.get_staff()
-        if self.user_id in proj_owners or self.user_id in proj_staff:
+        project = Project.objects.filter(_id=data['project']).first()
+        if project:
+            project_serializer = ProjectSerializer(project)
+            proj_owners = project_serializer.get_owners()
+            proj_staff = project_serializer.get_staff()
+            if self.user_id in proj_owners or self.user_id in proj_staff:
+                return Response(project_serializer.get_documents())
             return Response({
-                'documents': project_serializer.get_documents()
-            })
-        return Response({
-            'exception': 'Access Denied'
-        }, status=403)
+                'exception': 'Access Denied'
+            }, status=403)
+        else:
+            return Response({
+                'exception': 'Project cannot be found'
+            }, status=400)
 
 
 
