@@ -487,9 +487,7 @@ class DocumentDetailView(APIView):
                 return Response({
                     'exception': 'Document not found'
                 }, status=400)
-            return Response({
-                'document': doc_data
-            })
+            return Response(doc_data)
         return Response({
             'exception': 'Access Denied'
         }, status=403)
@@ -523,13 +521,10 @@ class DocumentListView(APIView):
 
 def validate_data(data, user_id):
     data['project'] = ObjectId(data['project'])
-    print("validate_data")
-    print(str(Document.objects.filter(_id=ObjectId(data['document'])).first().project))
-    print(data['project'])
-    # if Document.objects.filter(_id=ObjectId(data['document'])).first().project != data['project']:
-    #     return Response({
-    #         'exception': 'Document not found'
-    #     }, status=400)
+    if Document.objects.filter(_id=ObjectId(data['document'])).first().project._id != data['project']:
+        return Response({
+            'exception': 'Document not found'
+        }, status=203)
 
     project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
     proj_owners = project_serializer.get_owners()
@@ -551,48 +546,42 @@ class AnnotationView(APIView):
         resp = validate_data(request.data, self.user_id)
         if resp == True:
             data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
-            data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
-            data['annotation']['user'] = self.user_id
-            serializer = AnnotationSerializer(data=data['annotation'])
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response({'message': 'success'})
-        return resp
-
-    def put(self, request):
-        resp = validate_data(request.data, self.user_id)
-        if resp == True:
-            data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
-            data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
-            annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
-            if not annotation:
-                return Response({
-                    'exception': 'Annotation not found'
-                }, status=400)
-            if annotation.user == self.user_id:
-                serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
+            data['annotation']['document'] = ObjectId(data['document'])
+            if data['annotation']["_id"] == "":
+                data['annotation']['user'] = self.user_id
+                serializer = AnnotationSerializer(data=data['annotation'])
                 serializer.is_valid(raise_exception=True)
                 serializer.save()
                 return Response({'message': 'success'})
-            return Response({
-                'exception': 'Access Denied'
-            }, status=403)
+            else:
+                data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
+                annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
+                if not annotation:
+                    return Response({
+                        'exception': 'Annotation not found'
+                    }, status=400)
+                if annotation.user._id == self.user_id:
+                    serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save()
+                    return Response({'message': 'success'})
+                return Response({
+                    'exception': 'Access Denied'
+                }, status=403)
         return resp
 
     def delete(self, request):
         resp = validate_data(request.data, self.user_id)
         if resp == True:
             data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
+            data['annotation']['document'] = ObjectId(data['document'])
             data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
             annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
             if not annotation:
                 return Response({
                     'exception': 'Annotation not found'
                 }, status=400)
-            if annotation.user == self.user_id:
+            if annotation.user._id == self.user_id:
                 annotation.delete()
                 return Response({'message': 'success'})
             return Response({
@@ -613,17 +602,18 @@ class AnnotationListView(APIView):
             data = request.data
             data['document'] = ObjectId(data['document'])
             annotations = DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()
-            user_annotations = []
-            other_annotations = []
-            for annotation in annotations:
-                if annotation['user'] == self.user_id:
-                    user_annotations.append(annotation)
-                else:
-                    other_annotations.append(annotation)
-            return Response({
-                'user_annotations': user_annotations,
-                'other_annotations': other_annotations
-            })
+            # user_annotations = []
+            # other_annotations = []
+            # for annotation in annotations:
+            #     if annotation['user'] == self.user_id:
+            #         user_annotations.append(annotation)
+            #     else:
+            #         other_annotations.append(annotation)
+            # return Response({
+            #     'user_annotations': user_annotations,
+            #     'other_annotations': other_annotations
+            # })
+            return Response(annotations)
         return resp
 
 class AllAnnotationsView(APIView):
