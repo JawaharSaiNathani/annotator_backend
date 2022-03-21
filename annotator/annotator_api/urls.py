@@ -30,13 +30,13 @@ urlpatterns = [
     path('document-detail', DocumentDetailView.as_view(), name='DocumentDetail'),
 
     path('annotation', AnnotationView.as_view(), name='Annotation'),
-    path('annotation/<int:pk>',AnnotationView.as_view(), name='AnnotationDetail'),
     path('annotation-list', AnnotationListView.as_view(), name='AnnotationList'),
     path('all-annotations',AllAnnotationsView.as_view(), name="AllAnnotations"),
 
     path('train-model', TrainModelView.as_view()),
-    path('user-modelpool-list', ModelPoolListView.as_view(), name='ModelPoolList'),
-    path('user-modelpool-list/<int:pk>',
-         ModelPoolListView.as_view(), name='ModelPoolDetail'),
+    path('annotate', AnnotateView.as_view()),
+
+    path('modelpool-list', ModelPoolListView.as_view(), name='ModelPoolList'),
+    path('create-modelpool', ModelPoolView.as_view()),
     path('change-modelpool-status', ModelPoolStatusView.as_view()),
 ]

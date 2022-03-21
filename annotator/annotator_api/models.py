@@ -100,10 +100,12 @@ class AnnotationModel(models.Model):
     avgHeight = models.FloatField(default=0)
 
     def get_upload_path(instance, filename):
-        return 'static/models/' + instance.name.replace(' ', '') + '_' + str(instance._id) + '.pth'
+        return 'static/models/' + instance.name.replace(' ', '') + '_' + str(instance.user._id) + '.pth'
 
     model = models.FileField(upload_to=get_upload_path)
-    model_pool = models.IntegerField()
+    model_pool = models.CharField(max_length=24)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
 
 
@@ -113,10 +115,9 @@ class ModelPool(models.Model):
     description = models.TextField(default='', blank=True)
 
     modelpool_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='sub_modelpools')
-    subdescription_list = models.TextField(default='', blank=True)
-    pool_models = models.ManyToManyField(AnnotationModel, related_name='models', symmetrical=False)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    pool_models = models.ManyToManyField(AnnotationModel, blank=True, related_name='pool_models', symmetrical=False)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="project_modelpools")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_modelpools")
 
 
 

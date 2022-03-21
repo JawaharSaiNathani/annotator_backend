@@ -68,6 +68,70 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 
+class AnnotationModelSerializer(serializers.ModelSerializer):
+    _id = ObjectId()
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
+    project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), many=False)
+
+    class Meta:
+        model = AnnotationModel
+        fields = ['_id', 'name', 'avgWidth', 'avgHeight', 'model', 'model_pool', 'user', 'project']
+    
+    def to_representation(self, instance):
+        return {
+            '_id': str(instance._id),
+            'name': instance.name
+        }
+
+
+class ModelPoolStatusSerializer(serializers.ModelSerializer):
+    _id = ObjectId()
+    main_modelpool = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=False)
+    sub_modelpool = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=False)
+
+    class Meta:
+        model = ModelPoolStatus
+        fields = ['_id', 'main_modelpool', 'sub_modelpool', 'is_active']
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['_id'] = str(data['_id'])
+        return data
+
+
+class ModelPoolSerializer(serializers.ModelSerializer):
+    _id = ObjectId()
+    modelpool_list = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=True, required=False)
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
+    project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), many=False)
+    pool_models = serializers.PrimaryKeyRelatedField(queryset=AnnotationModel.objects.all(), many=True, required=False)
+
+    class Meta:
+        model = ModelPool
+        fields = ['_id', 'name', 'description', 'modelpool_list', 'pool_models', 'user', 'project']
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['_id'] = str(data['_id'])
+        temp_mps = []
+        for id in data['modelpool_list']:
+            mp = ModelPoolSerializer(ModelPool.objects.filter(_id=id).first()).data
+            mp_status = ModelPoolStatus.objects.filter(main_modelpool=ObjectId(data['_id']), sub_modelpool=id).first().is_active
+            temp_mps.append({
+                '_id': mp['_id'],
+                'name': mp['name'],
+                'is_active': mp_status
+            })
+        data['modelpool_list'] = temp_mps
+        data['pool_models'] = AnnotationModelSerializer(AnnotationModel.objects.filter(_id__in=data['pool_models']), many=True).data
+        data['user'] = UserSerializer(User.objects.filter(_id=instance.user._id).first()).get()
+        data['project'] = ProjectSerializer(Project.objects.filter(_id=instance.project._id).first()).data
+        return data
+    
+    def getId(self):
+        return str(self.instance._id)
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     creator = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
@@ -75,10 +139,11 @@ class ProjectSerializer(serializers.ModelSerializer):
     staff = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
 
     project_documents = DocumentSerializer(source='documents', required=False, many=True)
+    project_modelpools = ModelPoolSerializer(required=False, many=True)
 
     class Meta:
         model = Project
-        fields = ['_id', 'title', 'description', 'creator', 'owners', 'staff', 'project_documents']
+        fields = ['_id', 'title', 'description', 'creator', 'owners', 'staff', 'project_documents', 'project_modelpools']
     
     def to_representation(self, instance):
         return {
@@ -99,6 +164,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_documents(self):
         data = super().to_representation(self.instance)
         return data['project_documents']
+    
+    def get_modelpools(self):
+        data = super().to_representation(self.instance)
+        return data['project_modelpools']
 
 
 
@@ -201,32 +270,3 @@ class RequestSerializer(serializers.ModelSerializer):
             'terminal': terminal[instance.terminal],
             'status': status[instance.status]
         }
-
-
-
-class AnnotationModelSerializer(serializers.ModelSerializer):
-    _id = ObjectId()
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
-
-    class Meta:
-        model = AnnotationModel
-        fields = ['_id', 'name', 'avgWidth', 'avgHeight', 'model', 'user', 'model_pool']
-
-class ModelPoolSerializer(serializers.ModelSerializer):
-    _id = ObjectId()
-    pool_models = serializers.PrimaryKeyRelatedField(queryset=AnnotationModel.objects.all(), many=True)
-    modelpool_list = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=True)
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
-
-    class Meta:
-        model = ModelPool
-        fields = ['_id', 'name', 'description', 'modelpool_list', 'subdescription_list', 'pool_models', 'user']
-
-class ModelPoolStatusSerializer(serializers.ModelSerializer):
-    _id = ObjectId()
-    main_modelpool = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=False)
-    sub_modelpool = serializers.PrimaryKeyRelatedField(queryset=ModelPool.objects.all(), many=False)
-
-    class Meta:
-        model = ModelPoolStatus
-        fields = ['_id', 'main_modelpool', 'sub_modelpool', 'is_active']

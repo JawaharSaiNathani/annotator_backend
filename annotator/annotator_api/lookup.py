@@ -4,14 +4,13 @@ from PIL import Image
 from torch.utils import data
 from time import sleep 
 import torch
-import os
-import shutil
 import torch.nn as nn
 import torch.optim as optim
 import sys
 import copy
 import random
 from PIL import Image
+
 
 def get_annotations(annotations):
     patterns = []
@@ -21,7 +20,7 @@ def get_annotations(annotations):
 
     for annotation in annotations:
         img = np.array(Image.open(annotation['document']).convert('L'))
-        subregion = img[annotation['topY']:annotation['topX'], annotation['bottomY']:annotation['bottomX']]
+        subregion = img[int(annotation['topY']):int(annotation['bottomY']), int(annotation['topX']):int(annotation['bottomX'])]
         if annotation['is_antipattern'] == True:
             antipatterns.append(subregion)
             antipattern_dimensions.append([subregion.shape[1], subregion.shape[0]])
@@ -66,9 +65,9 @@ def generate_pattern_canvas(canvas_height, canvas_width, p_dataset, p_dimension,
                 sub_image = p_dataset[random_image_number]
                 (_, sub_image) = cv2.threshold(sub_image, 127, 255, cv2.THRESH_BINARY)
 
-                if(i+p_dimension[0] < canvas_height and j+p_dimension[1] < canvas_width):
-                    canvas[i:i+p_dimension[0], j:j+p_dimension[1]] = sub_image
-                    labels[i+(p_dimension[0]//2), j+(p_dimension[1]//2)] = 199920
+                if(i+p_dimension[1] < canvas_height and j+p_dimension[0] < canvas_width):
+                    canvas[i:i+p_dimension[1], j:j+p_dimension[0]] = sub_image
+                    labels[i+(p_dimension[1]//2), j+(p_dimension[0]//2)] = 199920
 
             j += p_dimension[1] + 5
         i += p_dimension[0] + 5
@@ -90,17 +89,17 @@ def generate_antipattern_canvas(canvas_height, canvas_width, ap_dataset, ap_dime
             temp_height = 0
             temp_width = 0
             if anc == -1:
-                sub_image = np.zeros((p_dimension[0], p_dimension[1]))
-                temp_height = p_dimension[0]
-                temp_width = p_dimension[1]
+                sub_image = np.zeros((p_dimension[1], p_dimension[0]))
+                temp_height = p_dimension[1]
+                temp_width = p_dimension[0]
             elif len(ap_dataset) > 0:
                 sub_image = ap_dataset[anc]
-                temp_height = ap_dimensions[anc][0]
-                temp_width = ap_dimensions[anc][1]
+                temp_height = ap_dimensions[anc][1]
+                temp_width = ap_dimensions[anc][0]
             else:
-                sub_image = np.zeros((ap_dimensions[0][0], ap_dimensions[0][1]))
-                temp_height = p_dimension[0]
-                temp_width = p_dimension[1]
+                sub_image = np.zeros((ap_dimensions[0][1], ap_dimensions[0][0]))
+                temp_height = p_dimension[1]
+                temp_width = p_dimension[0]
 
             (_, sub_image) = cv2.threshold(sub_image, 127, 255, cv2.THRESH_BINARY)
             if(i+temp_height < canvas_height and j+temp_width < canvas_width):
@@ -133,8 +132,8 @@ def make_dataset(p_dataset, p_dimension, ap_dataset, ap_dimensions, no_of_images
         X.append([image])
         y.append(label.reshape(1, -1))
 
-    # X, y = torch.from_numpy(np.stack(X)), torch.from_numpy(np.vstack(y))
-    # return (X, y)
+    X, y = torch.from_numpy(np.stack(X)), torch.from_numpy(np.vstack(y))
+    return (X, y)
 
 class cnn(nn.Module):
     def __init__(self, kernel_dimension):
@@ -154,12 +153,11 @@ class cnn(nn.Module):
 def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
     first_epoch_loss = None
     last_epoch_loss  = None
-    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    device = 'cpu'
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     net = cnn(kernel_dimension)
 
-    # if torch.cuda.device_count() > 1:
-    #   net = nn.DataParallel(net)
+    if torch.cuda.device_count() > 1:
+      net = nn.DataParallel(net)
 
     net.to(device)
     loss_fn = nn.MSELoss()
@@ -197,13 +195,13 @@ def lookup(annotations, model_name):
     antipatterns = 255 - antipatterns
 
     (train_x, train_y) = make_dataset(p_dataset = patterns, p_dimension = pattern_dimensions, ap_dataset = antipatterns, ap_dimensions = antipattern_dimensions, no_of_images = 200)
-    # train_x = train_x.type(torch.float32)
-    # train_y = train_y.type(torch.float32)
+    train_x = train_x.type(torch.float32)
+    train_y = train_y.type(torch.float32)
     train_dataset = data.TensorDataset(train_x, train_y)
     train_loader = data.DataLoader(train_dataset, batch_size = 4, shuffle = True)
     
-    kernel_height = pattern_dimensions[0]
-    kernel_width = pattern_dimensions[1]
+    kernel_width = pattern_dimensions[0]
+    kernel_height = pattern_dimensions[1]
 
     if(kernel_height%2 == 0):
         kernel_height += 1
@@ -221,12 +219,12 @@ def lookup(annotations, model_name):
 
         if((first_loss*0.3) >= last_loss):
             true_learning = True
-            break 
+            break
     
     print('Final Loss =',int(loss))
 
     if(true_learning):
-        # torch.save(best_model.state_dict(), 'static/trained_models/' + model_name + '.pth')
+        torch.save(best_model.state_dict(), 'static/trained_models/' + model_name + '.pth')
         return (True, [kernel_height, kernel_width])
     else:
         return (False, [0,0])

@@ -1,3 +1,4 @@
+from functools import partial
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
@@ -10,7 +11,8 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from bson import ObjectId
 from .serializers import *
 from .models import *
-# from .lookup import lookup
+from .lookup import lookup
+from .annotate import annotate
 
 
 
@@ -487,9 +489,7 @@ class DocumentDetailView(APIView):
                 return Response({
                     'exception': 'Document not found'
                 }, status=400)
-            return Response({
-                'document': doc_data
-            })
+            return Response(doc_data)
         return Response({
             'exception': 'Access Denied'
         }, status=403)
@@ -523,13 +523,10 @@ class DocumentListView(APIView):
 
 def validate_data(data, user_id):
     data['project'] = ObjectId(data['project'])
-    print("validate_data")
-    print(str(Document.objects.filter(_id=ObjectId(data['document'])).first().project))
-    print(data['project'])
-    # if Document.objects.filter(_id=ObjectId(data['document'])).first().project != data['project']:
-    #     return Response({
-    #         'exception': 'Document not found'
-    #     }, status=400)
+    if Document.objects.filter(_id=ObjectId(data['document'])).first().project._id != data['project']:
+        return Response({
+            'exception': 'Document not found'
+        }, status=203)
 
     project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
     proj_owners = project_serializer.get_owners()
@@ -551,48 +548,44 @@ class AnnotationView(APIView):
         resp = validate_data(request.data, self.user_id)
         if resp == True:
             data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
-            data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
-            data['annotation']['user'] = self.user_id
-            serializer = AnnotationSerializer(data=data['annotation'])
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response({'message': 'success'})
-        return resp
-
-    def put(self, request):
-        resp = validate_data(request.data, self.user_id)
-        if resp == True:
-            data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
-            data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
-            annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
-            if not annotation:
-                return Response({
-                    'exception': 'Annotation not found'
-                }, status=400)
-            if annotation.user == self.user_id:
-                serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
+            data['annotation']['document'] = ObjectId(data['document'])
+            if data['annotation']["_id"] == "":
+                del data['annotation']['_id']
+                data['annotation']['user'] = self.user_id
+                serializer = AnnotationSerializer(data=data['annotation'])
                 serializer.is_valid(raise_exception=True)
                 serializer.save()
                 return Response({'message': 'success'})
-            return Response({
-                'exception': 'Access Denied'
-            }, status=403)
+            else:
+                data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
+                annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
+                if not annotation:
+                    return Response({
+                        'exception': 'Annotation not found'
+                    }, status=400)
+                if annotation.user._id == self.user_id:
+                    data['annotation']['ground_truth'] = True
+                    serializer = AnnotationSerializer(annotation, data=data['annotation'], partial=True)
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save()
+                    return Response({'message': 'success'})
+                return Response({
+                    'exception': 'Access Denied'
+                }, status=403)
         return resp
 
     def delete(self, request):
         resp = validate_data(request.data, self.user_id)
         if resp == True:
             data = request.data
-            data['annotation']['document'] = ObjectId(data['annotation']['document'])
+            data['annotation']['document'] = ObjectId(data['document'])
             data['annotation']['_id'] = ObjectId(data['annotation']['_id'])
             annotation = Annotation.objects.filter(_id=data['annotation']['_id'], document=data['annotation']['document']).first()
             if not annotation:
                 return Response({
                     'exception': 'Annotation not found'
                 }, status=400)
-            if annotation.user == self.user_id:
+            if annotation.user._id == self.user_id:
                 annotation.delete()
                 return Response({'message': 'success'})
             return Response({
@@ -613,17 +606,18 @@ class AnnotationListView(APIView):
             data = request.data
             data['document'] = ObjectId(data['document'])
             annotations = DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()
-            user_annotations = []
-            other_annotations = []
-            for annotation in annotations:
-                if annotation['user'] == self.user_id:
-                    user_annotations.append(annotation)
-                else:
-                    other_annotations.append(annotation)
-            return Response({
-                'user_annotations': user_annotations,
-                'other_annotations': other_annotations
-            })
+            # user_annotations = []
+            # other_annotations = []
+            # for annotation in annotations:
+            #     if annotation['user'] == self.user_id:
+            #         user_annotations.append(annotation)
+            #     else:
+            #         other_annotations.append(annotation)
+            # return Response({
+            #     'user_annotations': user_annotations,
+            #     'other_annotations': other_annotations
+            # })
+            return Response(annotations)
         return resp
 
 class AllAnnotationsView(APIView):
@@ -632,9 +626,7 @@ class AllAnnotationsView(APIView):
         return super().dispatch(request, *args, **kwargs)
     
     def post(self,request):
-        print("AllAnnotationsView Started")
         data = request.data
-        print(data)
         data['project'] = ObjectId(data['project'])
         project_serializer = ProjectSerializer(Project.objects.filter(_id=data['project']).first())
         proj_owners = project_serializer.get_owners()
@@ -642,11 +634,8 @@ class AllAnnotationsView(APIView):
 
         if self.user_id in proj_owners or self.user_id in proj_staff:
             annotations = []
-            
             for document in Document.objects.filter(project=data['project']):
-                print("hello")
                 for annotation in Annotation.objects.filter(document=document._id):
-
                     annotations.append({
                         'name':annotation.name,
                         '_id': str(annotation._id),
@@ -685,213 +674,208 @@ class TrainModelView(APIView):
             pattern_count = 0
             for document in Document.objects.filter(project=data['project']):
                 for annotation in Annotation.objects.filter(name=model_name, document=document._id):
-                    if annotation.is_antipattern == False:
-                        pattern_count += 1
-                    annotations.append({
-                        'topX': annotation.topX,
-                        'topY': annotation.topY,
-                        'bottomX': annotation.bottomX,
-                        'bottomY': annotation.bottomY,
-                        'is_antipattern': annotation.is_antipattern,
-                        'document': document.image
-                    })
+                    if annotation.ground_truth:
+                        if annotation.is_antipattern == False:
+                            pattern_count += 1
+                        annotations.append({
+                            'topX': annotation.topX,
+                            'topY': annotation.topY,
+                            'bottomX': annotation.bottomX,
+                            'bottomY': annotation.bottomY,
+                            'is_antipattern': annotation.is_antipattern,
+                            'document': document.image
+                        })
 
             if pattern_count < 1:
                 return Response({
                     'message': 'Annotations not found for model - ' + model_name
                 }, status=203)
 
-            # result, dimensions = lookup(annotations, model_name, channel_layer)
-            result = False
-            dimensions = [0, 0]
+            result, dimensions = lookup(annotations, model_name)
             if result:
                 with open('static/trained_models/' + model_name + '.pth', 'rb') as f:
                     model_bytestream = BytesIO(f.read())
 
-                # os.remove('static/trained_models/' + model_name + '.pth')
+                try:
+                    os.remove('static/trained_models/' + model_name + '.pth')
+                except:
+                    print("Model not found in trained_models directory")
 
                 model = InMemoryUploadedFile(
                     model_bytestream, 'FileFeild', model_name+'.pth', 'pth', sys.getsizeof(model_bytestream), None)
-                data = {
-                    'name': model_name,
+                model_data = {
                     'avgWidth': dimensions[1],
                     'avgHeight': dimensions[0],
-                    'model': model,
-                    'user': self.user_id
-                }
-                modelpool_data = {
-                    'name': model_name,
-                    'user': self.user_id
+                    'model': model
                 }
 
                 annotation_model = AnnotationModel.objects.filter(
-                    name=model_name, user=self.user_id).first()
-
-                if 'description' in request.data:
-                    modelpool_data['description'] = request.data['description']
-                    modelpool_data['subdescription_list'] = request.data['description']
-
-                if annotation_model:
-                    modelpool = ModelPool.objects.filter(
-                        id=annotation_model.model_pool).first()
-                    modelpool_serializer = ModelPoolSerializer(
-                        modelpool, data=modelpool_data, partial=True)
-
-                else:
-                    modelpool_data['modelpool_list'] = []
-                    modelpool_data['pool_models'] = []
-                    modelpool_serializer = ModelPoolSerializer(data=modelpool_data)
-
-                modelpool_serializer.is_valid(raise_exception=True)
-                modelpool_serializer.save()
+                    name=model_name, project=data['project'], user=self.user_id).first()
 
                 if annotation_model:
                     try:
                         os.remove(str(annotation_model.model))
-                    except:
-                        print('[-] Model not found in storage')
-
-                    serializer = AnnotationModelSerializer(
-                        annotation_model, data=data, partial=True)
-
+                    except Exception as e:
+                        print(e)
+                        print("Previous model not found")
+                    model_serializer = AnnotationModelSerializer(annotation_model, data=model_data, partial=True)
+                    model_serializer.is_valid(raise_exception=True)
+                    model_serializer.save()
                 else:
-                    data['model_pool'] = modelpool_serializer.data['id']
-                    serializer = AnnotationModelSerializer(data=data)
-
-                serializer.is_valid(raise_exception=True)
-                serializer.save()
-
-                if not annotation_model:
-                    modelpool = ModelPool.objects.filter(
-                        id=serializer.data['model_pool']).first()
-                    modelpool_serializer = ModelPoolSerializer(
-                        modelpool, data={'pool_models': [serializer.data['id']]}, partial=True)
+                    modelpool_data = {
+                        'name': model_name,
+                        'description': 'Main Modelpool of '+model_name,
+                        'modelpool_list': [],
+                        'pool_models': [],
+                        'project': data['project'],
+                        'user': self.user_id
+                    }
+                    modelpool_serializer = ModelPoolSerializer(data=modelpool_data)
                     modelpool_serializer.is_valid(raise_exception=True)
                     modelpool_serializer.save()
+
+                    model_data['name'] = model_name
+                    model_data['model_pool'] = str(modelpool_serializer.data['_id'])
+                    model_data['project'] = data['project']
+                    model_data['user'] = self.user_id
+                    model_serializer = AnnotationModelSerializer(data=model_data)
+                    model_serializer.is_valid(raise_exception=True)
+                    model_serializer.save()
+
+                    new_modelpool_data = {
+                        'pool_models': [ObjectId(model_serializer.data['_id'])]
+                    }
+                    
+                    old_modelpool = ModelPool.objects.filter(_id=ObjectId(modelpool_serializer.data['_id'])).first()
+                    new_modelpool_serializer = ModelPoolSerializer(old_modelpool, data=new_modelpool_data, partial=True)
+                    new_modelpool_serializer.is_valid(raise_exception=True)
+                    new_modelpool_serializer.save()
+
                 return Response({'message': 'Model successfully trained'})
 
             else:
                 return Response({
                     'message': 'Model cannot be trained'
-                }, status=403)
+                }, status=203)
+
 
 
 def get_pool_models(modelpool_id):
     pool_models = []
-    modelpool = ModelPool.objects.filter(id=modelpool_id).first()
+    modelpool = ModelPool.objects.filter(_id=modelpool_id).first()
     if modelpool:
         data = ModelPoolSerializer(modelpool).data
         for pool in data['modelpool_list']:
             modelpool_status = ModelPoolStatus.objects.filter(
-                main_modelpool=modelpool_id, sub_modelpool=pool).first()
+                main_modelpool=modelpool_id, sub_modelpool=ObjectId(pool['_id'])).first()
             if modelpool_status.is_active == True:
-                subpool_models = get_pool_models(pool)
+                subpool_models = get_pool_models(ObjectId(pool['_id']))
                 pool_models = pool_models + subpool_models
         if len(data['modelpool_list']) == 0:
-            pool_models.append(data['pool_models'][0])
+            pool_models.append(ObjectId(data['pool_models'][0]['_id']))
     return list(set(pool_models))
 
 
-def get_modelpool(modelpool_id, models_required=True):
-    modelpool = ModelPool.objects.filter(id=modelpool_id).first()
-
-    if modelpool:
-        data = ModelPoolSerializer(modelpool).data
-        del data['user']
-        sub_modelpools_data = []
-        for pool in data['modelpool_list']:
-            sub_modelpool = ModelPool.objects.filter(id=pool).first()
-            sub_modelpool_status = ModelPoolStatus.objects.filter(
-                main_modelpool=modelpool.id, sub_modelpool=sub_modelpool.id).first().is_active
-            sub_modelpools_data.append({
-                'id': sub_modelpool.id,
-                'name': sub_modelpool.name,
-                'is_active': sub_modelpool_status
-            })
-        data['modelpool_list'] = sub_modelpools_data
-        del data['pool_models']
-        if models_required:
-            pool_models = get_pool_models(data['id'])
-            models_data = []
-            for model_id in pool_models:
-                annotation_model = AnnotationModel.objects.filter(
-                    id=model_id).first()
-                models_data.append({
-                    'id': annotation_model.id,
-                    'name': annotation_model.name
-                })
-            data['pool_models'] = models_data
-        return data
-
-    return False
+class AnnotateView(APIView):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_id = get_user_from_request(request)._id
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request):
+        data = request.data
+        pool_models = []
+        for pool in data['selected_modelpools']:
+            pool_models += get_pool_models(ObjectId(pool['_id']))
+        
+        image_path = str(Document.objects.filter(_id=ObjectId(data['document'])).first().image)
+        annotations = annotate(image_path, AnnotationModel.objects.filter(_id__in=list(set(pool_models))), ObjectId(data['document']), self.user_id)
+        for annotation in annotations:
+            for anno in annotations[annotation]:
+                serializer = AnnotationSerializer(data=anno)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+        return Response({
+            'message': 'success'
+        })
 
 
-class ModelPoolListView(APIView):
-    def get(self, request):
-        get_user_from_request(request)
-        user_id = request.data['id']
-
-        if 'pk' in self.kwargs:
-            data = get_modelpool(self.kwargs['pk'])
-            if data != False:
-                return Response(data)
-            else:
-                return Response({
-                    'message': 'ModelPool not found'
-                }, status=400)
-
-        modelpools = ModelPool.objects.filter(user=user_id)
-        modelpools_data = []
-        for modelpool in modelpools:
-            modelpools_data.append(get_modelpool(modelpool.id, False))
-
-        return Response(modelpools_data)
+class ModelPoolView(APIView):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_id = get_user_from_request(request)._id
+        return super().dispatch(request, *args, **kwargs)
 
     def post(self, request):
-        get_user_from_request(request)
-        user_id = request.data['id']
         data = request.data
         data['pool_models'] = []
-        data['user'] = user_id
+        data['user'] = self.user_id
+        data['project'] = ObjectId(data['project'])
+        data['modelpool_list'] = []
+        for pool in data['selected_modelpools']:
+            data['modelpool_list'].append(ObjectId(pool['_id']))
+
+        del data['selected_modelpools']
+        data['pool_models'] = []
         serializer = ModelPoolSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         pool_models = []
-        description = ""
-        for pool in data['modelpool_list']:
-            pool_models += get_pool_models(pool)
-            desc = ModelPool.objects.filter(
-                id=pool).first().subdescription_list
-            if desc != '':
-                description += desc.replace(';', '') + ";"
+        for id in data['modelpool_list']:
+            pool_models += get_pool_models(id)
 
             modelpool_status_data = {
-                'main_modelpool': serializer.data['id'],
-                'sub_modelpool': pool
+                'main_modelpool': ObjectId(serializer.getId()),
+                'sub_modelpool': id
             }
-            modelpool_status_serializer = ModelPoolStatusSerializer(
-                data=modelpool_status_data)
+            modelpool_status_serializer = ModelPoolStatusSerializer(data=modelpool_status_data)
             modelpool_status_serializer.is_valid(raise_exception=True)
             modelpool_status_serializer.save()
-
-        modelpool = ModelPool.objects.filter(id=serializer.data['id']).first()
-        serializer = ModelPoolSerializer(modelpool, data={
-                                         'pool_models': pool_models, 'subdescription_list': description}, partial=True)
+        pool_models = list(set(pool_models))
+        modelpool = ModelPool.objects.filter(_id=ObjectId(serializer.getId()),).first()
+        serializer = ModelPoolSerializer(modelpool, data={'pool_models': pool_models}, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return Response({'message': 'success'})
 
 
-class ModelPoolStatusView(APIView):
+
+class ModelPoolListView(APIView):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_id = get_user_from_request(request)._id
+        return super().dispatch(request, *args, **kwargs)
+
     def post(self, request):
-        get_user_from_request(request)
-        main_modelpool, sub_modelpool = request.data['main_modelpool'], request.data['sub_modelpool']
-        modelpool_status = ModelPoolStatus.objects.filter(
-            main_modelpool=main_modelpool, sub_modelpool=sub_modelpool).first()
-        serializer = ModelPoolStatusSerializer(
-            modelpool_status, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        data = request.data
+        data['project'] = ObjectId(data['project'])
+        project = Project.objects.filter(_id=data['project']).first()
+        if project:
+            project_serializer = ProjectSerializer(project)
+            proj_owners = project_serializer.get_owners()
+            proj_staff = project_serializer.get_staff()
+            if self.user_id in proj_owners or self.user_id in proj_staff:
+                modelpools = project_serializer.get_modelpools()
+                return Response(modelpools)
+            return Response({
+                'exception': 'Access Denied'
+            }, status=403)
+        else:
+            return Response({
+                'exception': 'Project cannot be found'
+            }, status=400)
+        
+
+
+class ModelPoolStatusView(APIView):
+    def dispatch(self, request, *args, **kwargs):
+        self.user_id = get_user_from_request(request)._id
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request):
+        data = request.data
+        for obj in data:
+            modelpool_status = ModelPoolStatus.objects.filter(main_modelpool=ObjectId(obj['main_modelpool']), sub_modelpool=ObjectId(obj['sub_modelpool'])).first()
+            serializer = ModelPoolStatusSerializer(modelpool_status, data={'is_active': obj['is_active']}, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
         return Response({'message': 'success'})
