@@ -638,12 +638,6 @@ class AllAnnotationsView(APIView):
                 for annotation in Annotation.objects.filter(document=document._id):
                     annotations.append({
                         'name':annotation.name,
-                        '_id': str(annotation._id),
-                        'topX': annotation.topX,
-                        'topY': annotation.topY,
-                        'bottomX': annotation.bottomX,
-                        'bottomY': annotation.bottomY,
-                        'is_antipattern': annotation.is_antipattern,
                         'document': str(document._id)
                     })
             return Response({
