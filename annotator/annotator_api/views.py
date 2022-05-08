@@ -701,16 +701,10 @@ class TrainModelView(APIView):
             }
             data = json.dumps({'annotations': annotations, 'model_name': model_name}).encode("utf-8")
             res = requests.post(url='http://127.0.0.1:5000/api/train', data=data, headers=headers)
-            result = False
-            dimensions = [0,0]
+            res_data = res.json()
+            result, dimensions = res_data['result'], res_data['dimensions']
             if result:
-                with open('static/trained_models/' + model_name + '.pth', 'rb') as f:
-                    model_bytestream = BytesIO(f.read())
-
-                try:
-                    os.remove('static/trained_models/' + model_name + '.pth')
-                except:
-                    print("Model not found in trained_models directory")
+                model_bytestream = BytesIO(base64.b64decode(res_data['model'][2:-1]))
 
                 model = InMemoryUploadedFile(
                     model_bytestream, 'FileFeild', model_name+'.pth', 'pth', sys.getsizeof(model_bytestream), None)
