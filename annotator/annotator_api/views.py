@@ -9,6 +9,8 @@ import sys
 from io import BytesIO
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from bson import ObjectId
+import requests
+import json
 from .serializers import *
 from .models import *
 from .lookup import lookup
@@ -683,7 +685,7 @@ class TrainModelView(APIView):
                             'bottomX': annotation.bottomX,
                             'bottomY': annotation.bottomY,
                             'is_antipattern': annotation.is_antipattern,
-                            'document': document.image
+                            'document': str(DocumentSerializer(document).data['image'])
                         })
 
             if pattern_count < 1:
@@ -691,7 +693,16 @@ class TrainModelView(APIView):
                     'message': 'Annotations not found for model - ' + model_name
                 }, status=203)
 
-            result, dimensions = lookup(annotations, model_name)
+            # print(annotations)
+            # result, dimensions = lookup(annotations, model_name)
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            data = json.dumps({'annotations': annotations, 'model_name': model_name}).encode("utf-8")
+            res = requests.post(url='http://127.0.0.1:5000/api/train', data=data, headers=headers)
+            result = False
+            dimensions = [0,0]
             if result:
                 with open('static/trained_models/' + model_name + '.pth', 'rb') as f:
                     model_bytestream = BytesIO(f.read())
