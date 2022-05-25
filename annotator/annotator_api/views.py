@@ -11,6 +11,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from bson import ObjectId
 import requests
 import json
+import codecs
 from .serializers import *
 from .models import *
 from .lookup import lookup
@@ -608,17 +609,6 @@ class AnnotationListView(APIView):
             data = request.data
             data['document'] = ObjectId(data['document'])
             annotations = DocumentSerializer(Document.objects.filter(_id=data['document']).first()).get_annotations()
-            # user_annotations = []
-            # other_annotations = []
-            # for annotation in annotations:
-            #     if annotation['user'] == self.user_id:
-            #         user_annotations.append(annotation)
-            #     else:
-            #         other_annotations.append(annotation)
-            # return Response({
-            #     'user_annotations': user_annotations,
-            #     'other_annotations': other_annotations
-            # })
             return Response(annotations)
         return resp
 
@@ -693,27 +683,35 @@ class TrainModelView(APIView):
                     'message': 'Annotations not found for model - ' + model_name
                 }, status=203)
 
-            # print(annotations)
-            # result, dimensions = lookup(annotations, model_name)
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
-            data = json.dumps({'annotations': annotations, 'model_name': model_name}).encode("utf-8")
-            res = requests.post(url='http://127.0.0.1:5000/api/train', data=data, headers=headers)
+            req_data = json.dumps({'annotations': annotations, 'model_name': model_name}).encode("utf-8")
+            res = requests.post(url='http://10.21.160.218:5000/api/train', data=req_data, headers=headers)
             res_data = res.json()
             result, dimensions = res_data['result'], res_data['dimensions']
             if result:
-                model_bytestream = BytesIO(base64.b64decode(res_data['model'][2:-1]))
+                down_req = requests.get(url='http://10.21.160.218:5000/api/download-model', headers=headers)
+                with open("static/trained_models/model.pth", "wb") as mdl:
+                    mdl.write(down_req.content)
+                
+                # open("static/trained_models/model.pth", "wb").write(down_req.content)
+                with open('static/trained_models/model.pth', 'rb') as f:
+                    model_bytestream = BytesIO(f.read())
 
+                try:
+                    os.remove('static/trained_models/model.pth')
+                except:
+                    print("Model not found in trained_models directory")
                 model = InMemoryUploadedFile(
-                    model_bytestream, 'FileFeild', model_name+'.pth', 'pth', sys.getsizeof(model_bytestream), None)
+                    model_bytestream, 'FileFeild', model_name+'.pth', 'pth', sys.getsizeof(down_req.content), None)
+
                 model_data = {
                     'avgWidth': dimensions[1],
                     'avgHeight': dimensions[0],
                     'model': model
                 }
-
                 annotation_model = AnnotationModel.objects.filter(
                     name=model_name, project=data['project'], user=self.user_id).first()
 

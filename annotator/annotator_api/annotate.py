@@ -64,9 +64,9 @@ def annotate(image_path, modelList, document, user):
     for model in modelList:
         anno_model = cnn(int(model.avgHeight), int(model.avgWidth))
         if torch.cuda.is_available():
-            anno_model.load_state_dict(torch.load(model.model))
+            anno_model.load_state_dict(torch.load(model.model), strict=False)
         else:
-            anno_model.load_state_dict(torch.load(model.model, map_location = torch.device('cpu')))
+            anno_model.load_state_dict(torch.load(model.model, map_location = torch.device('cpu')), strict=False)
 
         pred = testModel(anno_model, image, device)
         boundingBoxes = findBoundingBoxes(pred, int(model.avgHeight), int(model.avgWidth))

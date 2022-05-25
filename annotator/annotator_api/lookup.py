@@ -16,14 +16,15 @@ def get_annotations(annotations):
     patterns = []
     pattern_dimensions = [0, 0]     # 0- width, 1- height
     antipatterns = []
-    antipattern_dimensions = []     # 0- width, 1- height
+    antipattern_dimensions = [0, 0]     # 0- width, 1- height
 
     for annotation in annotations:
         img = np.array(Image.open(annotation['document']).convert('L'))
         subregion = img[int(annotation['topY']):int(annotation['bottomY']), int(annotation['topX']):int(annotation['bottomX'])]
         if annotation['is_antipattern'] == True:
             antipatterns.append(subregion)
-            antipattern_dimensions.append([subregion.shape[1], subregion.shape[0]])
+            antipattern_dimensions[0] += subregion.shape[1]
+            antipattern_dimensions[1] += subregion.shape[0]
         
         else:
             patterns.append(subregion)
@@ -32,9 +33,15 @@ def get_annotations(annotations):
     
     pattern_dimensions[0] = int(pattern_dimensions[0]/len(patterns))
     pattern_dimensions[1] = int(pattern_dimensions[1]/len(patterns))
+
+    antipattern_dimensions[0] = int(antipattern_dimensions[0]/len(antipatterns))
+    antipattern_dimensions[1] = int(antipattern_dimensions[1]/len(antipatterns))
     
     for i in range(len(patterns)):
         patterns[i] = cv2.resize(patterns[i], tuple(pattern_dimensions), interpolation=cv2.INTER_AREA)
+
+    for i in range(len(antipatterns)):
+        antipatterns[i] = cv2.resize(antipatterns[i], tuple(antipattern_dimensions), interpolation=cv2.INTER_AREA)
 
     patterns = np.array(patterns)
     antipatterns = np.array(antipatterns)
@@ -88,18 +95,14 @@ def generate_antipattern_canvas(canvas_height, canvas_width, ap_dataset, ap_dime
         while j < canvas_width:
             temp_height = 0
             temp_width = 0
-            if anc == -1:
+            if anc == -1 or len(ap_dataset) == 0:
                 sub_image = np.zeros((p_dimension[1], p_dimension[0]))
                 temp_height = p_dimension[1]
                 temp_width = p_dimension[0]
             elif len(ap_dataset) > 0:
                 sub_image = ap_dataset[anc]
-                temp_height = ap_dimensions[anc][1]
-                temp_width = ap_dimensions[anc][0]
-            else:
-                sub_image = np.zeros((ap_dimensions[0][1], ap_dimensions[0][0]))
-                temp_height = p_dimension[1]
-                temp_width = p_dimension[0]
+                temp_height = ap_dimensions[1]
+                temp_width = ap_dimensions[0]
 
             (_, sub_image) = cv2.threshold(sub_image, 127, 255, cv2.THRESH_BINARY)
             if(i+temp_height < canvas_height and j+temp_width < canvas_width):
@@ -189,7 +192,7 @@ def train_model(train_loader, kernel_dimension = [30, 30], max_epochs = 1):
     
     return (best_model, min_loss, first_epoch_loss, last_epoch_loss)
 
-def lookup(annotations, model_name):
+def lookup(annotations):
     patterns, pattern_dimensions, antipatterns, antipattern_dimensions = get_annotations(annotations)
     patterns = 255 - patterns
     antipatterns = 255 - antipatterns
@@ -224,7 +227,7 @@ def lookup(annotations, model_name):
     print('Final Loss =',int(loss))
 
     if(true_learning):
-        torch.save(best_model.state_dict(), 'static/trained_models/' + model_name + '.pth')
+        torch.save(best_model.state_dict(), 'trained_models/model.pth')
         return (True, [kernel_height, kernel_width])
     else:
         return (False, [0,0])
