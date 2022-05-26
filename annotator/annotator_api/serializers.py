@@ -4,7 +4,6 @@ from .models import *
 from bson import ObjectId
 
 
-
 class AnnotationSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     document = serializers.PrimaryKeyRelatedField(queryset=Document.objects.all(), many=False)
@@ -35,12 +34,10 @@ class AnnotationSerializer(serializers.ModelSerializer):
         return data
 
 
-
 class DocumentSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), many=False)
-
-    annotation_list = AnnotationSerializer(source="annotations", required=False, many=True)
+    annotation_list = AnnotationSerializer(source="annotations", required=False, many=True)     # List of annotations in document
 
     class Meta:
         model = Document
@@ -50,7 +47,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         try:
             image = open(data['image'], 'rb')
-            data['image'] = base64.b64encode(image.read())
+            data['image'] = base64.b64encode(image.read())      # image file -> bytes string
         except Exception as e:
             print(e)
             instance.delete()
@@ -65,7 +62,6 @@ class DocumentSerializer(serializers.ModelSerializer):
     def get_annotations(self):
         data = super().to_representation(self.instance)
         return data['annotation_list']
-
 
 
 class AnnotationModelSerializer(serializers.ModelSerializer):
@@ -170,7 +166,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         return data['project_modelpools']
 
 
-
 class NotificationSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=False)
@@ -187,12 +182,10 @@ class NotificationSerializer(serializers.ModelSerializer):
         }
 
 
-
 class UserSerializer(serializers.ModelSerializer):
     _id = ObjectId()
     owned_projects = ProjectSerializer(source='owner', required=False, many=True)
     shared_projects = ProjectSerializer(source='staff', required=False, many=True)
-
     notifications = NotificationSerializer(source='user_notifications', required=False, many=True)
 
     class Meta:
@@ -244,7 +237,6 @@ class UserSerializer(serializers.ModelSerializer):
     def get_user_notifications(self):
         data = dict(self.to_representation(self.instance))
         return data['notifications']
-
 
 
 class RequestSerializer(serializers.ModelSerializer):

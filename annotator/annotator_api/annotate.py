@@ -59,7 +59,6 @@ def annotate(image_path, modelList, document, user):
 
     image = image.reshape((1,image.shape[0],image.shape[1]))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
     result = {}
     for model in modelList:
         anno_model = cnn(int(model.avgHeight), int(model.avgWidth))
@@ -97,5 +96,4 @@ def annotate(image_path, modelList, document, user):
                     'document': document,
                     'user': user
                 }]
-                  
     return result

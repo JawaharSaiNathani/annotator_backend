@@ -8,6 +8,7 @@ class User(AbstractUser):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
 
+    # path for user profile picture
     def get_upload_path(instance, filename):
         return 'static/users/{0}/images/{1}'.format(instance.username, filename)
 
@@ -19,18 +20,17 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
 
-
 class Project(models.Model):
     _id = models.ObjectIdField(primary_key=True)
     title = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
 
-    creator = models.ForeignKey(User, on_delete=models.CASCADE)
-    owners = models.ManyToManyField(User, blank=True, symmetrical=False, related_name='owner')
-    staff = models.ManyToManyField(User, blank = True, symmetrical=False, related_name='staff')
+    creator = models.ForeignKey(User, on_delete=models.CASCADE)     # Project created by
+    owners = models.ManyToManyField(User, blank=True, symmetrical=False, related_name='owner')      # List of Project owners
+    staff = models.ManyToManyField(User, blank = True, symmetrical=False, related_name='staff')     # List of Project staff
 
 
-
+# User notifications
 class Notification(models.Model):
     _id = models.ObjectIdField(primary_key=True)
     title = models.CharField(max_length=255)
@@ -38,7 +38,7 @@ class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_notifications')
 
 
-
+# Request choices
 requestStatusChoices = (
     ("1", "is_pending"),
     ("2", "accepted"),
@@ -57,12 +57,11 @@ class Request(models.Model):
     _id = models.ObjectIdField(primary_key=True)
     title = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    role = models.CharField(max_length=20, choices = requestRoleChoices, default='2')
-    terminal = models.CharField(max_length=20, choices = requestTerminalChoices, default='1')
-    status = models.CharField(max_length=20, choices = requestStatusChoices, default='1')
-
+    user = models.ForeignKey(User, on_delete=models.CASCADE)        # Request's user
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)      # Request's project
+    role = models.CharField(max_length=20, choices = requestRoleChoices, default='2')       # User role in Project
+    terminal = models.CharField(max_length=20, choices = requestTerminalChoices, default='1')       # Request initiated by [ User | Project ]
+    status = models.CharField(max_length=20, choices = requestStatusChoices, default='1')       # Request status
 
 
 class Document(models.Model):
@@ -70,13 +69,13 @@ class Document(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
 
+    # path for document image
     def get_upload_path(instance, filename):
         return 'static/projects/{0}/documents/{1}'.format(instance.project.title.replace(' ', '') + '_' + str(instance.project._id), filename)
 
     image = models.ImageField(upload_to=get_upload_path,blank=True)
     is_annotated = models.BooleanField(default=False)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="documents")
-
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="documents")        # Document => Project
 
 
 class Annotation(models.Model):
@@ -87,10 +86,9 @@ class Annotation(models.Model):
     bottomX = models.FloatField(default=0)
     bottomY = models.FloatField(default=0)
     is_antipattern = models.BooleanField(default=False)
-    ground_truth = models.BooleanField(default=True)
+    ground_truth = models.BooleanField(default=True)        # True -> [if verified by user] | False -> [not verified by user(predicted annotations)]
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="annotations")
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-
 
 
 class AnnotationModel(models.Model):
@@ -99,14 +97,14 @@ class AnnotationModel(models.Model):
     avgWidth = models.FloatField(default=0)
     avgHeight = models.FloatField(default=0)
 
+    # path for model file
     def get_upload_path(instance, filename):
         return 'static/models/' + instance.name.replace(' ', '') + '_' + str(instance.user._id) + '.pth'
 
     model = models.FileField(upload_to=get_upload_path)
-    model_pool = models.CharField(max_length=24)
+    model_pool = models.CharField(max_length=24)        # Annotation model main Modelpool
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-
 
 
 class ModelPool(models.Model):
@@ -114,13 +112,13 @@ class ModelPool(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(default='', blank=True)
 
-    modelpool_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='sub_modelpools')
-    pool_models = models.ManyToManyField(AnnotationModel, blank=True, related_name='pool_models', symmetrical=False)
+    modelpool_list = models.ManyToManyField('self', blank = True, symmetrical=False, related_name='sub_modelpools')     # List of sub-modelpools
+    pool_models = models.ManyToManyField(AnnotationModel, blank=True, related_name='pool_models', symmetrical=False)    # List of models
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="project_modelpools")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_modelpools")
 
 
-
+# To track status of sub-modelpools in main-modelpool
 class ModelPoolStatus(models.Model):
     _id = models.ObjectIdField(primary_key=True)
     main_modelpool = models.ForeignKey(ModelPool, on_delete=models.CASCADE, related_name="main_modelpool")

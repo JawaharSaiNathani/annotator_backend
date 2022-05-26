@@ -18,7 +18,7 @@ from .lookup import lookup
 from .annotate import annotate
 
 
-
+# Validate user & return [User Object]
 def get_user_from_request(request):
     token = request.headers['authtoken']
     if not token:
@@ -34,7 +34,7 @@ def get_user_from_request(request):
     return user
 
 
-
+# Register User
 class RegisterView(APIView):
     def post(self, request):
         data = request.data
@@ -60,7 +60,7 @@ class RegisterView(APIView):
         return response
 
 
-
+# Login User
 class LoginView(APIView):
     def post(self, request):
         username = request.data['username']
@@ -85,12 +85,11 @@ class LoginView(APIView):
         return response
 
 
-
+# Validate User JWT Token
 class ValidateTokenView(APIView):
     def post(self, request):
         get_user_from_request(request)
         return Response({'message': 'success'})
-
 
 
 class GetNotificationsView(APIView):
@@ -105,7 +104,7 @@ class GetNotificationsView(APIView):
         })
 
 
-
+# Get User Details
 class GetUserView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -123,7 +122,6 @@ class GetUserView(APIView):
         return Response({'message': 'success'})
 
 
-
 class GetUserProjectsView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -136,7 +134,6 @@ class GetUserProjectsView(APIView):
         return Response(data)
 
 
-
 class CreateProjectView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user_id = get_user_from_request(request)._id
@@ -144,6 +141,7 @@ class CreateProjectView(APIView):
     
     def post(self, request):
         data = request.data
+        # Current User -> [ creator & owner ]
         data['creator'] = ObjectId(self.user_id)
         data['owners'] = [ObjectId(self.user_id)]
         data['staff'] = []
@@ -154,7 +152,7 @@ class CreateProjectView(APIView):
         return Response({'message': 'project created successfully'})
 
 
-
+# return {owners -> [Project owners], staff -> [Project staff]}
 class GetProjectUsersView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user_id = get_user_from_request(request)._id
@@ -179,7 +177,6 @@ class GetProjectUsersView(APIView):
         return Response({
             'exception': 'Project not found'
         }, status=203)
-
 
 
 class GetRequestsView(APIView):
@@ -215,7 +212,7 @@ class GetRequestsView(APIView):
                 }, status=403)
 
 
-
+# View to create & update user
 class RequestView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -250,7 +247,7 @@ class RequestView(APIView):
         return Response({'message': 'success'})
 
     def put(self, request):
-        if request.data['status'] == '2':
+        if request.data['status'] == '2':       # If Request Accepted
             req_id = request.data['id']
             req = Request.objects.filter(_id=ObjectId(req_id)).first()
             req_data = RequestSerializer(req).data
@@ -271,18 +268,22 @@ class RequestView(APIView):
                 req_serializer.is_valid(raise_exception=True)
                 req_serializer.save()
                 if req_data['role'] == 'owner':
+                    # Add Request's User -> Project Owners
                     proj_id = req_data['project']['_id']
                     proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
                     if User.objects.filter(username=req_data['user']['username']).first()._id not in proj_owners:
                         proj_owners.append(User.objects.filter(username=req_data['user']['username']).first()._id)
+                        # Update Project
                         proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
                         proj_serializer.is_valid(raise_exception=True)
                         proj_serializer.save()
                 else:
+                    # Add Request's User -> Project Staff
                     proj_id = req_data['project']['_id']
                     proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
                     if User.objects.filter(username=req_data['user']['username']).first()._id not in proj_staff:
                         proj_staff.append(User.objects.filter(username=req_data['user']['username']).first()._id)
+                        # Update Project
                         proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
                         proj_serializer.is_valid(raise_exception=True)
                         proj_serializer.save()
@@ -302,7 +303,7 @@ class RequestView(APIView):
             return Response({'message': 'success'})
 
 
-
+# return All Users[to send request from Project]
 class GetUserListView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -319,7 +320,6 @@ class GetUserListView(APIView):
                 users_list.append(user_data)
         data = {'user-list': users_list}
         return Response(data)
-
 
 
 class GetProjectListView(APIView):
@@ -339,7 +339,7 @@ class GetProjectListView(APIView):
         return Response(data)
 
 
-
+# Send notification to User
 def send_notification(title, description, user):
     notification = {
         'title': title,
@@ -351,7 +351,7 @@ def send_notification(title, description, user):
     notif_serializer.save()
 
 
-
+# Remove User from Project
 class RemoveUserView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -366,9 +366,9 @@ class RemoveUserView(APIView):
             print(proj_owners)
             if self.user_id in proj_owners:
                 temp_user_id = ObjectId(UserSerializer(User.objects.filter(username=data['user']).first()).data['_id'])
-                print(proj_owners)
                 if temp_user_id in proj_owners:
                     proj_owners.remove(temp_user_id)
+                    # Update Project
                     proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
                     proj_serializer.is_valid(raise_exception=True)
                     proj_serializer.save()
@@ -377,6 +377,7 @@ class RemoveUserView(APIView):
                     proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
                     if temp_user_id in proj_staff:
                         proj_staff.remove(temp_user_id)
+                        # Update Project
                         proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
                         proj_serializer.is_valid(raise_exception=True)
                         proj_serializer.save()
@@ -392,7 +393,7 @@ class RemoveUserView(APIView):
         }, status=203)
 
 
-
+# User leaving Project
 class LeaveProjectView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user = get_user_from_request(request)
@@ -406,6 +407,7 @@ class LeaveProjectView(APIView):
             proj_owners = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_owners()
             if self.user_id in proj_owners:
                 proj_owners.remove(self.user_id)
+                # Update Project
                 proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'owners': proj_owners}, partial=True)
                 proj_serializer.is_valid(raise_exception=True)
                 proj_serializer.save()
@@ -415,6 +417,7 @@ class LeaveProjectView(APIView):
                 proj_staff = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first()).get_staff()
                 if self.user_id in proj_staff:
                     proj_staff.remove(self.user_id)
+                    # Update Project
                     proj_serializer = ProjectSerializer(Project.objects.filter(_id=ObjectId(proj_id)).first(), data={'staff': proj_staff}, partial=True)
                     proj_serializer.is_valid(raise_exception=True)
                     proj_serializer.save()
@@ -426,7 +429,6 @@ class LeaveProjectView(APIView):
         return Response({
             'exception': 'Creator cannot be removed from project.'
         }, status=203)
-
 
 
 class DocumentView(APIView):
@@ -442,7 +444,7 @@ class DocumentView(APIView):
         data['project'] = ObjectId(data['project'][0])
         proj_owners = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_owners()
         proj_staff = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_staff()
-        if self.user_id in proj_owners or self.user_id in proj_staff:
+        if self.user_id in proj_owners or self.user_id in proj_staff:       # Validating User Id in Project
             serializer = DocumentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             serializer.save()
@@ -456,7 +458,7 @@ class DocumentView(APIView):
         data['project'] = ObjectId(data['project'])
         proj_owners = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_owners()
         proj_staff = ProjectSerializer(Project.objects.filter(_id=data['project']).first()).get_staff()
-        if self.user_id in proj_owners or self.user_id in proj_staff:
+        if self.user_id in proj_owners or self.user_id in proj_staff:       # Validating User Id in Project
             document = Document.objects.filter(_id=ObjectId(data['document'])).first()
             if not document:
                 return Response({
@@ -474,12 +476,12 @@ class DocumentView(APIView):
         }, status=403)
 
 
-
 class DocumentDetailView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user_id = get_user_from_request(request)._id
         return super().dispatch(request, *args, **kwargs)
     
+    # returns Document details
     def post(self, request):
         data = request.data
         data['project'] = ObjectId(data['project'])
@@ -498,12 +500,12 @@ class DocumentDetailView(APIView):
         }, status=403)
 
 
-
 class DocumentListView(APIView):
     def dispatch(self, request, *args, **kwargs):
         self.user_id = get_user_from_request(request)._id
         return super().dispatch(request, *args, **kwargs)
 
+    # returns List of Documents in Project
     def post(self, request):
         data = request.data
         data['project'] = ObjectId(data['project'])
@@ -523,7 +525,7 @@ class DocumentListView(APIView):
             }, status=400)
 
 
-
+# To validate User & Document in Project
 def validate_data(data, user_id):
     data['project'] = ObjectId(data['project'])
     if Document.objects.filter(_id=ObjectId(data['document'])).first().project._id != data['project']:
@@ -539,7 +541,6 @@ def validate_data(data, user_id):
     return Response({
         'exception': 'Access Denied'
     }, status=403)
-
 
 
 class AnnotationView(APIView):
@@ -688,11 +689,11 @@ class TrainModelView(APIView):
                 "Accept": "application/json",
             }
             req_data = json.dumps({'annotations': annotations, 'model_name': model_name}).encode("utf-8")
-            res = requests.post(url='http://10.21.160.218:5000/api/train', data=req_data, headers=headers)
+            res = requests.post(url='http://10.21.4.107:5000/api/train', data=req_data, headers=headers)
             res_data = res.json()
             result, dimensions = res_data['result'], res_data['dimensions']
             if result:
-                down_req = requests.get(url='http://10.21.160.218:5000/api/download-model', headers=headers)
+                down_req = requests.get(url='http://10.21.4.107:5000/api/download-model', headers=headers)
                 with open("static/trained_models/model.pth", "wb") as mdl:
                     mdl.write(down_req.content)
                 
