@@ -5,4 +5,4 @@
 annotator/annotator_api/migrations/__pycache__/
 annotator/annotator_api/__pycache__/
 annotator/annotator/__pycache__/
-# annotator/annotator_api/static/
+annotator/annotator_api/static/
